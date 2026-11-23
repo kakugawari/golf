@@ -1,7 +1,7 @@
 {
-  "name": "app-template",
+  "name": "golf",
   "version": "1.0.0",
-  "description": "ビルドなしで動くアプリの雛形 (進め方のルールつき)",
+  "description": "うちっぱなし ― 風を見て、ねらって、カキーン!",
   "private": true,
   "scripts": {
     "start": "node serve.js",

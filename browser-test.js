@@ -98,7 +98,7 @@ async function run() {
   try {
     // ------------------------------------------------ スマホで開く
     section('スマホで開く');
-    const context = await browser.newContext({ ...devices['iPhone 13'] });
+    const context = await browser.newContext({ ...devices['iPhone 14 Pro Max'] || devices['iPhone 13'] });
     const phone = await context.newPage();
     phone.on('pageerror', (e) => errors.push('スマホ: ' + e.message));
     phone.on('console', (m) => { if (m.type() === 'error') errors.push('スマホ: ' + m.text()); });
@@ -130,27 +130,91 @@ async function run() {
     ok(/^#[0-9a-f]{6}$/i.test(bar.theme), `帯の色 (theme-color) が決めてある (${bar.theme})`);
 
     // ------------------------------------------------ ここにアプリごとの確認を足す
-    section('アプリの操作');
-    if (!(await phone.locator('#btnAction').count())) {
-      skip('雛形のボタンが無い (アーティファクトから取り込んだ)。アプリに合わせた確認をここに書く');
-    } else {
-    await phone.locator('#btnAction').tap();
-    await phone.waitForTimeout(120);
-    const after = await phone.evaluate(() => ({
-      count: window.__app.state().count,
-      shown: document.getElementById('result').textContent
-    }));
-    ok(after.count === 1 && after.shown !== '—', `ボタンを押すと結果が出る (${after.shown})`);
+    section('アプリの操作 (うちっぱなし)');
+    {
+      const ctx = await browser.newContext({ viewport: { width: 430, height: 932 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 });
+      const pg = await ctx.newPage();
+      pg.on('pageerror', (e) => errors.push('操作: ' + e.message));
+      await pg.goto(URL, { waitUntil: 'load' });
+      // 1 球打つ (ページの中で毎コマ見て、白い玉が▲に来た瞬間に押す)。hold はパワーをためる長さ
+      await pg.evaluate(() => {
+        window.__shoot = (hold, late) => new Promise((done) => {
+          const G = window.__app.G, sw = document.getElementById('sw');
+          const ev = (t, el) => el.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerId: 1 }));
+          ev('pointerdown', sw);
+          setTimeout(() => {
+            ev('pointerup', window);
+            const t0 = performance.now();
+            const tick = () => {
+              if (G.phase === 'ring' && G.ring - G.r0 <= (late ? -25 : 2)) ev('pointerdown', sw);
+              if (G.phase === 'rest' && G.restT > 0.7) return done({ z: G.ball.z, x: G.ball.x, nice: G.nice, miss: G.shot.miss });
+              if (performance.now() - t0 > 15000) return done(null);
+              requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          }, hold);
+        });
+      });
 
-    // 押した直後に表示が飛ばないか (CSS アニメーションの上書き事故よけ)
-    const jump = await measureJump(phone, '#result', 'document.getElementById("btnAction").click()');
-    ok(jump < 12, `押した直後に表示が飛ばない (最大ずれ ${jump}px)`);
+      // 画面いっぱいに描く。安全域 (上 59・下 34) を足しても、スイングのボタンが画面に収まる
+      const fit = await pg.evaluate(() => {
+        const r = (q) => document.querySelector(q).getBoundingClientRect();
+        document.querySelector('.panel').style.paddingBottom = '46px';
+        const sw = r('#sw'), hud = r('.hud');
+        document.querySelector('.panel').style.paddingBottom = '';
+        return { cv: Math.round(r('#c').height), H: window.__app.size.H, sw: Math.round(sw.bottom), h: innerHeight };
+      });
+      ok(fit.cv === 932 && fit.H === 932, `絵が画面いっぱい (canvas ${fit.cv} / H ${fit.H})`);
+      ok(fit.sw <= fit.h - 34, `下の安全域を足しても、スイングのボタンが画面に収まる (ボタンの下 ${fit.sw})`);
+
+      // じゆうれんしゅう: ためて、▲で押すと、まっすぐ遠くへ飛ぶ。わざと遅れて押すと曲がって短い
+      await pg.locator('#bF').tap();
+      const good = await pg.evaluate(() => window.__shoot(1400, false));
+      ok(good && good.z > 60 && Math.abs(good.x) < good.z * 0.15, `うまく打つと遠くへまっすぐ飛ぶ (${good && Math.round(good.z)}y・横に ${good && Math.round(good.x)}y)`);
+      await pg.evaluate(() => document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+      await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
+      const bad = await pg.evaluate(() => window.__shoot(1400, true));
+      ok(bad && (bad.z < good.z || Math.abs(bad.x) > Math.abs(good.x) + 3), `遅れて押すと短いか曲がる (${bad && Math.round(bad.z)}y・横に ${bad && Math.round(bad.x)}y)`);
+
+      // ねらいうち 10 球: 最後まで打つと結果が出て、ベストを覚え、開き直しても残る
+      await pg.reload({ waitUntil: 'load' });
+      await pg.evaluate(() => { window.__shoot = undefined; });
+      await pg.evaluate(() => {
+        window.__shoot = (hold) => new Promise((done) => {
+          const G = window.__app.G, sw = document.getElementById('sw');
+          const ev = (t, el) => el.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerId: 1 }));
+          ev('pointerdown', sw);
+          setTimeout(() => { ev('pointerup', window); const t0 = performance.now();
+            const tick = () => { if (G.phase === 'ring' && G.ring - G.r0 <= 2) ev('pointerdown', sw);
+              if (G.phase === 'rest' && G.restT > 0.7) return done(true); if (performance.now() - t0 > 15000) return done(false); requestAnimationFrame(tick); };
+            requestAnimationFrame(tick); }, hold);
+        });
+      });
+      await pg.locator('#bC').tap();
+      let shots = 0;
+      for (let i = 0; i < 10; i++) {
+        const z = await pg.evaluate(() => window.__app.G.target.z);
+        // 旗の距離に合わせて ためる長さを変える (おおざっぱで良い)
+        if (await pg.evaluate((zz) => window.__shoot(400 + zz * 5), z)) shots++;
+        await pg.evaluate(() => document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+        await pg.waitForTimeout(150);
+      }
+      await pg.waitForFunction(() => !document.getElementById('over').hidden, null, { timeout: 5000 }).catch(() => {});
+      await pg.waitForTimeout(4200);
+      const res = await pg.evaluate(() => ({ over: !document.getElementById('over').hidden, score: window.__app.G.score, shown: document.getElementById('rs').textContent,
+        n: document.querySelectorAll('#rl div').length, best: window.__app.save.best }));
+      ok(shots === 10 && res.over && res.n === 10, `ねらいうち 10 球を打ち切ると結果が出る (${shots} 球・${res.n} 個の記録)`);
+      ok(String(res.score) === res.shown && res.best === res.score && res.score > 0, `合計 ${res.score} てんが出て、ベストに残る`);
+      await pg.reload({ waitUntil: 'load' });
+      const kept = await pg.evaluate(() => document.getElementById('best').textContent);
+      ok(kept.includes(String(res.score)), `開き直してもベストが残る (${kept})`);
+      await ctx.close();
     }
 
     // ------------------------------------------------ 明るい画面・暗い画面
     section('明るい画面と暗い画面');
     for (const scheme of ['light', 'dark']) {
-      const themed = await browser.newContext({ ...devices['iPhone 13'], colorScheme: scheme });
+      const themed = await browser.newContext({ ...devices['iPhone 14 Pro Max'] || devices['iPhone 13'], colorScheme: scheme });
       const page = await themed.newPage();
       page.on('pageerror', (e) => errors.push(scheme + ': ' + e.message));
       await page.goto(URL, { waitUntil: 'load' });
