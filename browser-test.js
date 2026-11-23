@@ -166,6 +166,19 @@ async function run() {
       });
       ok(fit.cv === 932 && fit.H === 932, `絵が画面いっぱい (canvas ${fit.cv} / H ${fit.H})`);
       ok(fit.sw <= fit.h - 34, `下の安全域を足しても、スイングのボタンが画面に収まる (ボタンの下 ${fit.sw})`);
+      // 背景は練習場の写真。写真の遠近に合わせて、玉はマットの上・旗は芝の上・奥ほど小さく描く
+      const pic = await pg.evaluate(async () => {
+        const bg = getComputedStyle(document.getElementById('stage')).backgroundImage;
+        const ok = await fetch('range.jpg').then((r) => r.ok).catch(() => false);
+        const { pr, TG } = window.__app, H = innerHeight, b = pr(0, 0, 0);
+        const flags = TG.map((t) => pr(t.x, 0, t.z));
+        return { bg, ok, ball: b.y / H, flagsY: flags.map((f) => f.y / H), flagsX: flags.map((f) => f.x / innerWidth),
+          farther: flags.slice(1).every((f, i) => f.s < flags[i].s) };
+      });
+      ok(/range\.jpg/.test(pic.bg) && pic.ok, '背景に練習場の写真を敷いている');
+      ok(pic.ball > 0.7 && pic.ball < 0.8, `玉はマットの上に描く (上から ${Math.round(pic.ball * 100)}%)`);
+      ok(pic.flagsY.every((y) => y > 0.46 && y < 0.6) && pic.flagsX.every((x) => x > 0.08 && x < 0.92) && pic.farther,
+        `旗はどれも芝の上 (上から ${pic.flagsY.map((y) => Math.round(y * 100)).join('/')}%)、遠いほど小さい`);
 
       // じゆうれんしゅう: ためて、▲で押すと、まっすぐ遠くへ飛ぶ。わざと遅れて押すと曲がって短い
       await pg.locator('#bF').tap();
