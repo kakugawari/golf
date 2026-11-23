@@ -176,6 +176,9 @@ async function run() {
           farther: flags.slice(1).every((f, i) => f.s < flags[i].s) };
       });
       ok(/range\.jpg/.test(pic.bg) && pic.ok, '背景に練習場の写真を敷いている');
+      // 打つ人は写真の切り抜き 2 枚 (構え・フィニッシュ)。どちらも読み込めている
+      const gim = await pg.evaluate(() => Object.fromEntries(Object.entries(window.__app.GIMG).map(([k, v]) => [k, v.im.naturalWidth])));
+      ok(gim.addr > 0 && gim.fin > 0, `打つ人の写真 (構え ${gim.addr}px・フィニッシュ ${gim.fin}px) が読み込めている`);
       ok(pic.ball > 0.7 && pic.ball < 0.8, `玉はマットの上に描く (上から ${Math.round(pic.ball * 100)}%)`);
       ok(pic.flagsY.every((y) => y > 0.46 && y < 0.6) && pic.flagsX.every((x) => x > 0.08 && x < 0.92) && pic.farther,
         `旗はどれも芝の上 (上から ${pic.flagsY.map((y) => Math.round(y * 100)).join('/')}%)、遠いほど小さい`);
