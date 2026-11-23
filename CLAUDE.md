@@ -2,8 +2,21 @@
 
 <!-- ここから: 新しいアプリを始めたら、この節を書き換える -->
 
-**まだ何も作っていない雛形の状態。** 最初の作業で、ここに
-「何のアプリか」「どう動かすか」「決めごと」を書き足すこと。
+**うちっぱなし** ― ゴルフの打ちっぱなし。◀ ▶ でねらい、スイングのボタンを長押ししてパワーをため、
+はなしたあと白い玉が下の▲に来た瞬間にタップして打つ。「ねらいうち(10球)」は旗に寄せて点を取る (風あり)、
+「じゆうれんしゅう」は飛んだ距離を見る。クラブは 1W・7I・PW。
+
+- もとは Claude のチャットで作ったアーティファクト「うちっぱなし」(`https://claude.ai/artifact/DE6iFEh1waK6wokGzjdunQ`)。
+  `import-artifact.js` で分けて取り込んだ。画面もロジックも `app.js` (canvas に奥行きのある練習場を描く。`core.js` は無い)
+- 記録は `localStorage` の `uchippanashi-v1` (ねらいうちのベスト・クラブごとのいちばん遠く)。アーティファクトで遊んだ記録は引き継がれない
+- 字は Google Fonts の M PLUS Rounded 1c (ネットにつながっていないときは、ほかの丸い書体になる)
+- 取り込んだあとに直したこと (アーティファクトを直してもう一度取り込むときは、付け直す):
+  - `styles.css`: `html,body` を `position:fixed` → `height:100vh; position:relative`、`#stage` を `fixed` → `absolute` (落とし穴の表「ホーム画面から開くと下に帯」)
+  - `app.js`: 大きさは窓 (`innerHeight`) ではなく `#stage` から取り、0 のときは組み直さない。`window.__app` (テストの入口) と `sw.js` の登録を足した
+    (コマの間隔 `dt` は、もとから上も下も止めてあった)
+  - `index.html`: charset を先頭へ。theme-color を空の色 `#5fb6ea` に。ホーム画面の名前「うちっぱなし」
+  - アイコン (`icon.svg` → `apple-touch-icon.png`: 空・旗のグリーン・ティーの上の玉) と、ネット優先の `sw.js` を作った
+- テストの打ち方は、ページの中で毎コマ見て、白い玉が▲に来た瞬間に押す (外から見張ると遅れる。やりのぼりで踏んだ)
 
 <!-- ここまで -->
 
@@ -83,15 +96,14 @@ npm run test:ui    # ブラウザで実際に動かすテスト (要 npm i -D pl
 
 ```
 index.html / styles.css   画面
-core.js                   ロジック。DOM を触らない。ブラウザと node の両方で動く
-app.js                    操作・描画
-core.test.js              ロジックのテスト (node --test)
+app.js                    ゲーム (canvas の描画・弾道・風・採点・効果音)
 browser-test.js           ブラウザで動かすテスト
 serve.js                  開発用サーバー
 import-artifact.js        アーティファクト (1 枚の HTML) を上の形に分ける
 import-artifact.test.js   その道具のテスト
 make-icon.js              icon.svg から PNG のアイコンを作る (名前:大きさ で何枚でも)
-apple-touch-icon.png      その PNG (180x180)
+apple-touch-icon.png      その PNG (180x180)。絵は空・旗のグリーン・ティーの上の玉
+sw.js                     オフラインでも開けるようにする (ネット優先)
 .github/workflows/pages.yml  main に入ったらテストして GitHub Pages に公開する
 ```
 

@@ -2,41 +2,63 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>アプリの雛形</title>
-<meta name="description" content="ビルドなしで動くアプリの雛形">
-<meta name="theme-color" content="#151a2e">
-<!-- ホーム画面に追加して開いたとき、時計や電池の帯の下まで画面を描く。
-     無いと iOS は帯の下からページを始め、帯を theme-color の板で塗る (画面のいちばん上が別の色になる)。
-     上の安全域は styles.css の env(safe-area-inset-top) で空けてある。
-     iOS は追加したときの設定を覚えているので、前に追加したアイコンは作り直さないと変わらない -->
-<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
+<meta name="apple-mobile-web-app-title" content="うちっぱなし">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#5fb6ea">
+<title>うちっぱなし</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap">
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="pill" id="hl">じゆうれんしゅう</div>
+    <div class="pill wind" id="hw"><small>かぜ</small><svg viewBox="0 0 20 20" id="wa"><path d="M10 1 L17 10 H12.5 V19 H7.5 V10 H3 Z" fill="#2b7bd9"/></svg><span id="wv">0m</span></div>
+  </div>
+  <div class="aimt pill" id="aimt" hidden><span class="dot" id="aimdot"></span><span id="aimtt"></span></div>
+  <div class="dial hide" id="dial"><svg id="arc" viewBox="0 0 200 200" aria-hidden="true"><g id="arcbg"></g><path id="afill" fill="none" stroke-width="16" stroke-linecap="round"/><path id="azone" fill="none" stroke="#ffd23f" stroke-width="22" stroke-linecap="round"/><path d="M100 189 l-10 15 h20 z" fill="#ffd23f" stroke="#173a1c" stroke-width="3" stroke-linejoin="round"/><g id="amk"><circle r="11" fill="#fff" stroke="#173a1c" stroke-width="3"/><circle r="4" fill="#173a1c"/></g></svg><div class="dc"><b id="dyd"></b><small id="dys"></small></div></div>
+  <div class="pop" id="pop"><div class="rib" id="pt"></div><div class="pbody"><svg id="pmap" viewBox="0 0 100 100" aria-hidden="true"></svg><div class="pnum"><div class="big"><b id="pb">0</b><span id="pu">てん</span></div><div class="stars" id="pst"></div></div></div><div class="s" id="ps"></div></div>
+  <div class="panel" id="panel">
+    <div class="clubs" id="clubs"></div>
+    <div class="ctrl">
+      <button class="ab" id="aL" aria-label="ひだりをねらう">◀</button>
+      <button class="sw idle" id="sw"><b id="swb">スイング</b><small id="sws">ながおし</small></button>
 
-<div id="app">
-  <header id="topbar">
-    <h1 class="title">アプリの雛形</h1>
-    <div class="topbar-actions">
-      <button type="button" id="btnAction" class="btn btn-primary">ためす</button>
+      <button class="ab" id="aR" aria-label="みぎをねらう">▶</button>
     </div>
-  </header>
-
-  <main id="stage">
-    <p class="lead">ここにアプリを作る。</p>
-    <p class="result" id="result">—</p>
-    <p class="note">
-      ロジックは <code>src/core.js</code> に、画面は <code>src/app.js</code> に書く。<br>
-      <code>npm test</code> でロジックを、<code>npm run test:ui</code> で画面を確かめる。
-    </p>
-  </main>
+    <div class="hint" id="hint"></div>
+  </div>
 </div>
 
-<script src="./core.js"></script>
+<div class="ov" id="title">
+  <div class="card">
+    <h1>うちっぱなし</h1>
+    <p>かぜを見て、ねらって、カキーン!</p>
+    <div class="how"><div><b>1</b>◀ ▶ で<br>ねらう</div><div><b>2</b>ボタンながおしで<br>パワー</div><div><b>3</b>▲にきたら<br>タップ</div></div>
+    <button class="btn" id="bC">ねらいうち(10球)</button>
+    <button class="btn sub" id="bF">じゆうれんしゅう</button>
+    <div class="row"><span id="best">ベスト ―</span><button class="snd" id="bS">おと:オン</button></div>
+  </div>
+</div>
+
+<div class="ov" id="over" hidden>
+  <div class="card">
+    <div class="ovt"><small>ねらいうち 10球</small>おわり! けっかはっぴょう</div>
+    <div class="rwrap"><div class="res"><b id="rs">0</b><span>てん</span></div><div class="stamp" id="rr"></div></div>
+    <div class="shots" id="rl"></div>
+    <div class="stats" id="rst"></div>
+    <div class="newbest" id="rb"></div>
+    <div class="rbtn" id="rbtn"><button class="btn" id="bA">もう一回</button><button class="btn sub" id="bT">タイトルへ</button></div>
+    <div class="skip" id="rskip">タップでとばす</div>
+  </div>
+</div>
+
 <script src="./app.js"></script>
 </body>
 </html>
