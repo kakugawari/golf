@@ -130,6 +130,24 @@ async function run() {
     ok(/^#[0-9a-f]{6}$/i.test(bar.theme), `帯の色 (theme-color) が決めてある (${bar.theme})`);
 
     // ------------------------------------------------ ここにアプリごとの確認を足す
+    section('打った音 (うちっぱなし)');
+    {
+      // 耳で聞けないので、OfflineAudioContext で描き出して大きさを測る。割れない (1 未満) で、低い「ドン」が入っている
+      const pg = await browser.newPage();
+      await pg.addInitScript(() => { window.AudioContext = function () { return new OfflineAudioContext(1, 44100, 44100); }; });
+      await pg.goto(URL, { waitUntil: 'load' });
+      const snd = await pg.evaluate(async () => { const A = window.__app, out = [];
+        for (const [n, m] of [[true, false], [false, false], [false, true]]) { for (let k = 0; k < 3; k++) {
+          A.resetAudio(); A.G.sound = true; A.sfx.hit(n, m); const d = (await A.audio.startRendering()).getChannelData(0);
+          let pk = 0, lo = 0; for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+          for (let i = 10; i < 8820; i++) { let s = 0; for (let j = 0; j < 10; j++) s += d[i - j]; lo += (s / 10) ** 2; }
+          out.push({ pk, lo: Math.sqrt(lo / 8810), m }); } }
+        return out; });
+      const pk = Math.max(...snd.map((x) => x.pk)), lo = Math.min(...snd.filter((x) => !x.m).map((x) => x.lo));
+      ok(pk < 0.97, `打った音が割れない (いちばん大きい所 ${pk.toFixed(2)})`);
+      ok(lo > 0.055, `打った音に低い「ドン」が入っている (低い音の量 ${lo.toFixed(3)}・前は 0.028〜0.039)`);
+      await pg.close();
+    }
     section('アプリの操作 (うちっぱなし)');
     {
       const ctx = await browser.newContext({ viewport: { width: 430, height: 932 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 });
@@ -179,6 +197,9 @@ async function run() {
       // 打つ人は写真の切り抜き 8 ポーズ。どれも読み込めている
       const gim = await pg.evaluate(() => window.__app.GFR.map((f) => f.im.naturalWidth));
       ok(gim.length === 8 && gim.every((w) => w > 0), `打つ人の写真 8 ポーズが読み込めている (${gim.join(', ')}px)`);
+      // 打つ人は小さめ (見本のように左下に小さく)。構えの背の高さを画面の点で測る
+      const gh = await pg.evaluate(() => { const A = window.__app, b = A.pr(0, 0, 0), f = A.GFR[0]; return Math.round((f.fy - 40) * b.s * A.GSC); });
+      ok(gh > 120 && gh < 220, `打つ人は小さめ (構えの背丈 ${gh}pt・画面の高さ 932)`);
       ok(pic.ball > 0.7 && pic.ball < 0.8, `玉はマットの上に描く (上から ${Math.round(pic.ball * 100)}%)`);
       ok(pic.flagsY.every((y) => y > 0.46 && y < 0.6) && pic.flagsX.every((x) => x > 0.08 && x < 0.92) && pic.farther,
         `旗はどれも芝の上 (上から ${pic.flagsY.map((y) => Math.round(y * 100)).join('/')}%)、遠いほど小さい`);
@@ -215,6 +236,42 @@ async function run() {
       await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
       const bad = await pg.evaluate(() => window.__shoot(1400, true));
       ok(bad && (bad.z < good.z || Math.abs(bad.x) > Math.abs(good.x) + 3), `遅れて押すと短いか曲がる (${bad && Math.round(bad.z)}y・横に ${bad && Math.round(bad.x)}y)`);
+
+      await pg.evaluate(() => document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+      await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
+      // ゲージは右はしに小さく: 旗・ねらい線・クラブの札・ボタンに重ならない (前は画面のまん中に 230pt で、旗とねらい線を隠していた)
+      await pg.waitForFunction(() => getComputedStyle(document.getElementById('dial')).opacity === '1', null, { timeout: 3000 });
+      const lay = await pg.evaluate(() => { const A = window.__app, r = (q) => document.querySelector(q).getBoundingClientRect(), d = r('#dial');
+        const inD = (p) => p && p.x > d.left && p.x < d.right && p.y > d.top && p.y < d.bottom;
+        const flags = A.TG.filter((t) => inD(A.pr(t.x, 3.4, t.z)) || inD(A.pr(t.x, 0, t.z))).length;
+        let aim = 0; for (let z = 4; z < 220; z += 3) if (inD(A.pr(A.G.aim * z, 0, z))) aim++;
+        const hit = (q) => { const e = r(q); return !(e.right < d.left || e.left > d.right || e.bottom < d.top || e.top > d.bottom); };
+        return { w: Math.round(d.width), flags, aim, clubs: hit('#clubs'), sw: hit('#sw'), right: Math.round(d.right), W: innerWidth, vis: getComputedStyle(document.getElementById('dial')).opacity }; });
+      ok(lay.vis === '1' && lay.w <= 160 && lay.right <= lay.W, `ゲージは右はしに小さく出ている (幅 ${lay.w}pt・右はし ${lay.right}/${lay.W})`);
+      ok(lay.flags === 0 && lay.aim === 0 && !lay.clubs && !lay.sw, `ゲージが旗・ねらい線・クラブの札・ボタンに重ならない (旗 ${lay.flags}・ねらい線 ${lay.aim})`);
+
+      // 打った手ごたえ: インパクトの形で一瞬止まり、玉の所に光、写真ごとゆれて寄る。そのあと元に戻る
+      const fx = await pg.evaluate(() => new Promise((done) => {
+        const G = window.__app.G, sw = document.getElementById('sw'), bg = document.getElementById('bg');
+        const ev = (t, el) => el.dispatchEvent(new PointerEvent(t, { bubbles: true }));
+        const r = { hold: 0, imp: false, moved: false };
+        let tap = 0, t0 = performance.now();
+        ev('pointerdown', sw);
+        const tick = () => { const now = performance.now();
+          if (G.phase === 'power' && now - t0 > 1400) ev('pointerup', window);
+          if (G.phase === 'ring' && G.ring - G.r0 <= 2) { tap = now; ev('pointerdown', sw); }
+          if (G.launched && r.lag === undefined) r.lag = Math.round(now - tap);
+          if (G.launched && G.hs > 0 && window.__app.poseIdx() === 5) r.hold++;
+          if (G.imp) r.imp = true;
+          if (bg.style.transform) r.moved = true;
+          if (G.phase === 'rest') { r.after = { bg: bg.style.transform, imp: G.imp, kick: G.kick }; return done(r); }
+          if (now - t0 > 12000) return done(r);
+          requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      }));
+      ok(fx.hold >= 3, `当たった瞬間、インパクトの形で少し止まる (${fx.hold} コマ)`);
+      ok(fx.imp && fx.moved, '当たった瞬間に玉の所が光り、写真ごとゆれて寄る');
+      ok(fx.after && fx.after.bg === '' && fx.after.imp === null && fx.after.kick === 0, '玉が止まるころには、ゆれも寄りも光も元に戻っている');
 
       // ねらいうち 10 球: 最後まで打つと結果が出て、ベストを覚え、開き直しても残る
       await pg.reload({ waitUntil: 'load' });
