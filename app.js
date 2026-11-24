@@ -4,6 +4,11 @@ const cv=$('c'),ctx=cv.getContext('2d');
 let W=0,H=0,HY=0,F=0,DPR=1;
 function resize(){const st=document.getElementById('stage'),w=st.clientWidth||innerWidth,h=st.clientHeight||innerHeight;if(!(w>=1&&h>=1))return;DPR=Math.min(2,window.devicePixelRatio||1);W=w;H=h;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);HY=H*0.29;F=Math.min(H*0.95,W*1.6);}
 addEventListener('resize',resize);resize();
+// 写真の大きさと位置は、的を描く pr() と同じ数 (picK と、はみ出しの半分) から px で決める。
+// CSS の「cover」まかせにすると、実機 (iPhone) で写真だけが 15pt ほど下にずれ、遠くの的が空中に浮いて見えた
+function placePhoto(){if(!(W>=1&&H>=1))return;const k=Math.max(W/704,H/1520),w=704*k,h=1520*k,x=(W-w)/2,y=(H-h)/2;
+ for(const el of [document.getElementById('stage'),document.getElementById('bg')]){el.style.backgroundSize=`${w}px ${h}px`;el.style.backgroundPosition=`${x}px ${y}px`;}}
+addEventListener('resize',placePhoto);placePhoto();
 
 const CLUBS=[
  {id:'dr',k:'1W',name:'ドライバー',carry:230,apex:30,roll:24},
