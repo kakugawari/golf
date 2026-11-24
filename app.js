@@ -211,10 +211,24 @@ function update(dt){
  else if(G.phase==='roll'){const s=G.shot;G.t+=dt;const v=Math.min(1,G.t/1.3);const lx=X(s,1),lz=Z(s,1),sl=(lx-X(s,0.97))/(lz-Z(s,0.97)||1);
   const r=s.roll*(1-(1-v)*(1-v));G.ball={x:lx+sl*r,y:s.apex*0.07*Math.abs(Math.sin(Math.PI*v*2))*(1-v),z:lz+r};if(v>=1)rest();}
  if(G.phase==='rest')G.restT+=dt;
- const c=G.cam,b=G.ball,active=['flight','roll','rest'].includes(G.phase);
- const tz=active?Math.max(-14,b.z-34):-14,th=active?4.5+b.y*0.6:4.5,tx=active?b.x*0.9:Math.min(1.8,W/F*2.8),k=Math.min(1,dt*(active?2.6:4));
- c.z+=(tz-c.z)*k;c.h+=(th-c.h)*k;c.x+=(tx-c.x)*k;
+ camUpdate(dt);
  setGauge();}
+/* カメラ: 写真ごと寄って、飛んでいく玉についていく (2D の寄り。写真は 1 枚なので、奥へは「望遠で寄る」形で追う)。
+   構えているあいだは少しだけ寄せて (CAM0)、写真のいちばん上の屋根の影を画面の外へ出す (時計の下が黒い帯に見えた)。
+   C.f は写真の上でどこを見るか (ふつうの画面の座標)、C.z は寄りの倍率 */
+const CAM0=1.06,CAMMAX=2.0,C={z:CAM0,f:null};
+function camTarget(){const o=pr(0,0,0),b=G.ball,act=['flight','roll','rest'].includes(G.phase)&&G.launched&&!(G.phase==='flight'&&G.t<0.3);  // 振り抜きを見せてから追う
+ if(!o)return null;if(!act)return {z:CAM0,f:{x:o.x,y:o.y},a:{x:o.x,y:o.y}};
+ const p=pr(b.x,b.y,b.z)||o;const z=Math.min(CAMMAX,CAM0+Math.max(0,b.z)/65);
+ // 玉を画面のまん中より少し上に置く (寄りが小さいうちは打った所寄り)
+ const u=Math.min(1,(z-CAM0)/0.6);return {z,f:p,a:{x:o.x+(W/2-o.x)*u,y:o.y+(H*0.42-o.y)*u}};}
+function camUpdate(dt){const t=camTarget();if(!t)return;if(!C.f){C.f={...t.f};C.a={...t.a};C.z=t.z;}
+ const k=Math.min(1,dt*(G.launched?3.2:4));C.z+=(t.z-C.z)*k;C.f.x+=(t.f.x-C.f.x)*k;C.f.y+=(t.f.y-C.f.y)*k;C.a.x+=(t.a.x-C.a.x)*k;C.a.y+=(t.a.y-C.a.y)*k;}
+// 写真と canvas に掛ける形: 画面 = 元の座標 x z + t。写真が画面をはみ出さない (すき間が出ない) ように t を止める
+function camT(){const z=C.z,f=C.f||{x:W/2,y:H/2},a=C.a||f;let tx=a.x-f.x*z,ty=a.y-f.y*z;tx=Math.min(0,Math.max(W-W*z,tx));ty=Math.min(-roofY()*z,Math.max(H-H*z,ty));return {z,tx,ty};}
+// 写真のいちばん上の屋根の影 (写真の y=0〜54) の下はし。ここより上は画面に出さない
+function roofY(){const k=picK();return (H-PIC.h*k)/2+54*k;}
+function view(p){const m=camT();return p&&{x:p.x*m.z+m.tx,y:p.y*m.z+m.ty,s:p.s*m.z};}
 
 /* ---------- draw ---------- */
 /* 背景は打席から見た練習場の写真 (range.jpg 704x1520)。カメラは打席に固定し、写真の遠近に合わせて描く。
@@ -269,9 +283,11 @@ function poseIdx(){const ph=G.phase,bk=p=>p<0.2?0:p<0.45?1:p<0.75?2:3;
  return 0;}
 function golfer(){const b=pr(0,0,0);if(!b)return;const sc=b.s*GSC,A=GFR[0];
  const fx=b.x+(A.fx-A.hx)*sc,fy=b.y+(A.fy-A.hy)*sc;
+ // カメラが玉を追って寄ると、手前の打つ人は大きくぼやけて画面に残る。寄るにつれて消す
+ const al=Math.max(0,Math.min(1,1-(C.z-CAM0)/0.3));if(al<=0)return;ctx.globalAlpha=al;
  ctx.fillStyle='rgba(0,0,0,.22)';ctx.beginPath();ctx.ellipse(fx+70*sc,fy,110*sc,16*sc,0,0,7);ctx.fill();
  let i=poseIdx();if(!(GFR[i].im.complete&&GFR[i].im.naturalWidth))i=0;const f=GFR[i];
- if(f.im.complete&&f.im.naturalWidth)ctx.drawImage(f.im,fx-f.fx*sc,fy-f.fy*sc,f.im.naturalWidth*sc,f.im.naturalHeight*sc);}
+ if(f.im.complete&&f.im.naturalWidth)ctx.drawImage(f.im,fx-f.fx*sc,fy-f.fy*sc,f.im.naturalWidth*sc,f.im.naturalHeight*sc);ctx.globalAlpha=1;}
 function ball(){const b=G.ball,g=pr(b.x,0,b.z),p=pr(b.x,b.y,b.z);if(!p)return;const r=Math.max(2.2,0.075*p.s);
  if(g){ctx.fillStyle=`rgba(0,0,0,${0.3*Math.max(0.15,1-b.y/40)})`;ctx.beginPath();ctx.ellipse(g.x,g.y,r*1.1,r*0.4,0,0,7);ctx.fill();}
  if(b.z<1&&b.y<0.1&&g){ctx.strokeStyle='#ffe28a';ctx.lineWidth=Math.max(1,0.05*g.s);ctx.beginPath();ctx.moveTo(g.x,g.y);ctx.lineTo(p.x,p.y+r);ctx.stroke();}
@@ -303,31 +319,34 @@ function windFx(dt){const w=G.wind,m=Math.hypot(w.x,w.z);if(m<0.1||G.phase==='ti
  for(const s of streaks){s.x+=vx*dt*(0.6+s.l);s.y+=vy*dt*(0.6+s.l);if(s.x>1.1)s.x-=1.2;if(s.x<-0.1)s.x+=1.2;if(s.y>1.1)s.y-=1.2;if(s.y<-0.1)s.y+=1.2;
   const x=s.x*W,y=s.y*H*0.75,L=(10+m*10)*s.l,n=Math.hypot(vx,vy)||1;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-vx/n*L,y-vy/n*L);ctx.stroke();}}
 function parts(){for(const q of G.parts){const p=pr(q.x,q.y,q.z);if(!p)continue;if(p.x<-50||p.x>W+50||p.y<-50||p.y>H+50)continue;const sz=Math.min(40,Math.max(2,q.s*p.s));ctx.globalAlpha=Math.min(1,q.life/(q.l0*0.4));ctx.fillStyle=q.c;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(q.rot);ctx.fillRect(-sz/2,-sz/4,sz,sz/2);ctx.restore();}ctx.globalAlpha=1;}
-function speedLines(){if(G.speed<=0)return;const a=Math.min(1,G.speed/0.6);ctx.strokeStyle=`rgba(255,255,255,${0.5*a})`;ctx.lineWidth=3;const o=pr(0,0,0)||{x:W/2,y:H*0.6},cx=o.x,cy=o.y;
+function speedLines(){if(G.speed<=0)return;const a=Math.min(1,G.speed/0.6);ctx.strokeStyle=`rgba(255,255,255,${0.5*a})`;ctx.lineWidth=3;const o=view(pr(0,0,0))||{x:W/2,y:H*0.6},cx=o.x,cy=o.y;
  for(let i=0;i<22;i++){const t=i/22*Math.PI*2+i,r1=Math.max(W,H)*(0.35+0.1*Math.sin(i*7)),r2=r1+60+40*a;ctx.beginPath();ctx.moveTo(cx+Math.cos(t)*r1,cy+Math.sin(t)*r1);ctx.lineTo(cx+Math.cos(t)*r2,cy+Math.sin(t)*r2);ctx.stroke();}}
 function placeDial(){const d=$('dial'),ph=G.phase,show=['ready','power','ring'].includes(ph)||(ph==='swing')||(ph==='flight'&&G.t<0.35);
  setCls(d,'hide',!show);if(!show)return;const sz=150;setA(d,'--ds',sz+'px');
- const b=pr(0,0,0);if(!b)return;setA(d,'left',Math.round(W-sz/2-24)+'px');setA(d,'top',Math.round(Math.min(H-sz/2-250,b.y-sz*0.55))+'px');}
+ const b=view(pr(0,0,0));if(!b)return;setA(d,'left',Math.round(W-sz/2-24)+'px');setA(d,'top',Math.round(Math.min(H-sz/2-250,b.y-sz*0.55))+'px');}
 const bgEl=$('bg');let bgLast='';
-function camBg(sx,sy,z,o){const v=(sx||sy||z>1.0005)?`translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px) scale(${z.toFixed(4)})`:'';const tag=v+'|'+Math.round(o.x)+','+Math.round(o.y);if(tag===bgLast)return;bgLast=tag;
- bgEl.style.transformOrigin=`${o.x}px ${o.y}px`;bgEl.style.transform=v;}
+function camBg(A,ex,ey){const v=`matrix(${A.toFixed(4)},0,0,${A.toFixed(4)},${ex.toFixed(1)},${ey.toFixed(1)})`;if(v===bgLast)return;bgLast=v;bgEl.style.transform=v;}
 let T0=performance.now(),TT=0;
 function frame(now){requestAnimationFrame(frame);if(document.hidden){T0=now;return;}const dt=Math.min(0.05,Math.max(0,(now-T0)/1000));T0=now;TT+=dt;try{update(dt);placeDial();}catch(e){console.error(e);}
  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.save();try{
  // ゆれと寄り: canvas と写真 (#bg) を同じだけ動かす (canvas だけ動かすと写真の上で絵がずれて見えるだけになる)
- const sx=G.shake>0?(Math.random()-0.5)*G.shake:0,sy=G.shake>0?(Math.random()-0.5)*G.shake:0,z=1+0.07*G.kick*G.kick,o=pr(0,0,0)||{x:W/2,y:H/2};
- ctx.translate(sx+o.x,sy+o.y);ctx.scale(z,z);ctx.translate(-o.x,-o.y);camBg(sx,sy,z,o);
+ // カメラ (寄り・玉を追う) のうえに、打った瞬間の寄り (kick) とゆれを重ねる。全部まとめて 1 つの形 (倍率 A・ずらし E) にする
+ const sx=G.shake>0?(Math.random()-0.5)*G.shake:0,sy=G.shake>0?(Math.random()-0.5)*G.shake:0,kz=1+0.07*G.kick*G.kick,m=camT(),o=view(pr(0,0,0))||{x:W/2,y:H/2};
+ const A=m.z*kz,ex=(m.tx-o.x)*kz+o.x+sx,ey=(m.ty-o.y)*kz+o.y+sy;
+ ctx.setTransform(DPR*A,0,0,DPR*A,DPR*ex,DPR*ey);camBg(A,ex,ey);
  greens();marks();aimLine(TT);
  const objs=[];
  for(const t of TG)objs.push({z:t.z,f:()=>flag(t,TT)});objs.push({z:0.01,f:golfer});objs.push({z:G.ball.z,f:()=>{trail();streak();ball();}});
- objs.sort((a,b)=>b.z-a.z).forEach(o=>o.f());impact();parts();windFx(dt);speedLines();
+ objs.sort((a,b)=>b.z-a.z).forEach(o=>o.f());impact();parts();
  }catch(e){console.error(e);}finally{ctx.restore();}
+ // 風の筋と速さの線は、画面に貼る物 (カメラに合わせて動かさない)
+ ctx.setTransform(DPR,0,0,DPR,0,0);try{windFx(dt);speedLines();}catch(e){console.error(e);}
  if(G.flash>0){ctx.fillStyle=`rgba(255,255,240,${Math.min(0.8,G.flash)})`;ctx.fillRect(0,0,W,H);}
  }
 buildClubs();hud();bestText();setGauge();requestAnimationFrame(frame);
 clearRun();
 // テストから中身をのぞく入口
-window.__app={G,CLUBS,TG,pr,GFR,poseIdx,GSC,sfx,tone,noise,resetAudio(){AC=null;NB=null;live=0;},get audio(){return AC;},get size(){return {W,H};},get save(){return save;}};
+window.__app={G,CLUBS,TG,pr,view,C,camT,roofY,GFR,poseIdx,GSC,sfx,tone,noise,resetAudio(){AC=null;NB=null;live=0;},get audio(){return AC;},get size(){return {W,H};},get save(){return save;}};
 
 }
 

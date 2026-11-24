@@ -250,6 +250,32 @@ async function run() {
       ok(lay.vis === '1' && lay.w <= 160 && lay.right <= lay.W, `ゲージは右はしに小さく出ている (幅 ${lay.w}pt・右はし ${lay.right}/${lay.W})`);
       ok(lay.flags === 0 && lay.aim === 0 && !lay.clubs && !lay.sw, `ゲージが旗・ねらい線・クラブの札・ボタンに重ならない (旗 ${lay.flags}・ねらい線 ${lay.aim})`);
 
+      // カメラ: 構えでは屋根の影を出さない。打つと玉についていき (寄る)、玉はいつも画面の中。次の球で元に戻る
+      await pg.waitForFunction(() => window.__app.C.z < 1.07, null, { timeout: 5000 });
+      const cam = await pg.evaluate(() => new Promise((done) => {
+        const A = window.__app, G = A.G, sw = document.getElementById('sw');
+        const ev = (t, el) => el.dispatchEvent(new PointerEvent(t, { bubbles: true }));
+        const top = () => { const m = A.camT(); return m.ty + A.roofY() * m.z; };   // 屋根の下はしが画面のどこに来るか (0 以下なら見えない)
+        const r = { roof0: -1e9, roof: -1e9, zmax: 0, out: 0, n: 0 };
+        let t0 = performance.now();
+        ev('pointerdown', sw);
+        const tick = () => { const now = performance.now();
+          if (G.phase === 'power' && now - t0 > 1400) ev('pointerup', window);
+          if (G.phase === 'ring' && G.ring - G.r0 <= 2) ev('pointerdown', sw);
+          if (r.roof0 === -1e9) r.roof0 = top(); r.roof = Math.max(r.roof, top());
+          if (G.phase === 'flight' || G.phase === 'roll') { r.n++; r.zmax = Math.max(r.zmax, A.C.z);
+            const p = A.view(A.pr(G.ball.x, G.ball.y, G.ball.z)); if (p && (p.x < 0 || p.x > innerWidth || p.y < 0 || p.y > innerHeight)) r.out++; }
+          if (G.phase === 'rest' && G.restT > 0.7) { ev('pointerdown', sw); r.back = performance.now(); }
+          if (r.back && performance.now() - r.back > 1500) { r.zback = A.C.z; return done(r); }
+          if (now - t0 > 15000) return done(r);
+          requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      }));
+      ok(cam.roof0 <= 0 && cam.roof <= 0.5, `画面のいちばん上に写真の屋根の影 (黒い帯) が出ない (構え ${cam.roof0.toFixed(1)}・いちばん下がった時 ${cam.roof.toFixed(1)})`);
+      ok(cam.zmax > 1.6 && cam.out <= cam.n * 0.05, `打つとカメラが玉についていく (寄り ${cam.zmax.toFixed(2)} 倍・玉が画面の外 ${cam.out}/${cam.n} コマ)`);
+      ok(cam.zback < 1.1, `次の球でカメラが打席に戻る (寄り ${cam.zback && cam.zback.toFixed(2)} 倍)`);
+      await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
+
       // 打った手ごたえ: インパクトの形で一瞬止まり、玉の所に光、写真ごとゆれて寄る。そのあと元に戻る
       const fx = await pg.evaluate(() => new Promise((done) => {
         const G = window.__app.G, sw = document.getElementById('sw'), bg = document.getElementById('bg');
@@ -263,15 +289,15 @@ async function run() {
           if (G.launched && r.lag === undefined) r.lag = Math.round(now - tap);
           if (G.launched && G.hs > 0 && window.__app.poseIdx() === 5) r.hold++;
           if (G.imp) r.imp = true;
-          if (bg.style.transform) r.moved = true;
-          if (G.phase === 'rest') { r.after = { bg: bg.style.transform, imp: G.imp, kick: G.kick }; return done(r); }
+          { const a = +(bg.style.transform.match(/matrix\(([\d.]+)/) || [0, 0])[1]; if (a / window.__app.C.z > 1.01) r.moved = true; }   // 写真がカメラより寄っている = 打った瞬間の寄り
+          if (G.phase === 'rest') { r.after = { shake: G.shake, imp: G.imp, kick: G.kick }; return done(r); }
           if (now - t0 > 12000) return done(r);
           requestAnimationFrame(tick); };
         requestAnimationFrame(tick);
       }));
       ok(fx.hold >= 3, `当たった瞬間、インパクトの形で少し止まる (${fx.hold} コマ)`);
       ok(fx.imp && fx.moved, '当たった瞬間に玉の所が光り、写真ごとゆれて寄る');
-      ok(fx.after && fx.after.bg === '' && fx.after.imp === null && fx.after.kick === 0, '玉が止まるころには、ゆれも寄りも光も元に戻っている');
+      ok(fx.after && fx.after.shake === 0 && fx.after.imp === null && fx.after.kick === 0, '玉が止まるころには、ゆれも寄りも光も元に戻っている');
 
       // ねらいうち 10 球: 最後まで打つと結果が出て、ベストを覚え、開き直しても残る
       await pg.reload({ waitUntil: 'load' });
