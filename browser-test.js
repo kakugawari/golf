@@ -239,6 +239,21 @@ async function run() {
 
       await pg.evaluate(() => document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
       await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
+      // 写真の置き場所は、的を描く計算と同じ数で px で決める (CSS の cover まかせだと、実機で写真だけずれて的が浮いた)。
+      // 入れ物の大きさが変わっても写真が動かないことを、画素で見る
+      await pg.waitForFunction(() => Math.abs(window.__app.C.z - 1.06) < 0.001, null, { timeout: 5000 });   // カメラが打席に戻りきってから測る
+      await pg.evaluate(() => { document.getElementById('c').style.visibility = 'hidden'; });
+      const before = await pg.screenshot({ clip: { x: 100, y: 380, width: 230, height: 120 } });
+      await pg.evaluate(() => { const b = document.getElementById('bg'); b.style.bottom = '-120px'; b.style.right = '-60px'; });
+      const nudged = await pg.screenshot({ clip: { x: 100, y: 380, width: 230, height: 120 } });
+      await pg.evaluate(() => { const b = document.getElementById('bg'); b.style.bottom = ''; b.style.right = ''; document.getElementById('c').style.visibility = ''; });
+      const diff = await pg.evaluate(async ([a, b]) => { const L = (u) => new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = u; });
+        const [A, B] = await Promise.all([L(a), L(b)]); const c = document.createElement('canvas'); c.width = A.width; c.height = A.height; const x = c.getContext('2d');
+        x.drawImage(A, 0, 0); const da = x.getImageData(0, 0, c.width, c.height).data; x.drawImage(B, 0, 0); const db = x.getImageData(0, 0, c.width, c.height).data;
+        let s = 0; for (let i = 0; i < da.length; i += 4) s += Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]); return s / (da.length / 4) / 3; },
+        ['data:image/png;base64,' + before.toString('base64'), 'data:image/png;base64,' + nudged.toString('base64')]);
+      ok(diff < 10, `写真は入れ物の大きさが変わってもずれない (画素の差 ${diff.toFixed(1)})`);
+
       // ゲージは右はしに小さく: 旗・ねらい線・クラブの札・ボタンに重ならない (前は画面のまん中に 230pt で、旗とねらい線を隠していた)
       await pg.waitForFunction(() => getComputedStyle(document.getElementById('dial')).opacity === '1', null, { timeout: 3000 });
       const lay = await pg.evaluate(() => { const A = window.__app, r = (q) => document.querySelector(q).getBoundingClientRect(), d = r('#dial');
