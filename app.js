@@ -249,7 +249,7 @@ function flag(t,time){const a=pr(t.x,0,t.z);if(!a||a.s>120||a.x<-200||a.x>W+200)
 function mat(){const pts=[pr(-2.6,0,-1.6),pr(2.2,0,-1.6),pr(2.2,0,1.6),pr(-2.6,0,1.6)];if(pts.some(p=>!p))return;ctx.fillStyle='#24602a';ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.fill();ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=2;ctx.stroke();}
 /* 打つ人は、使う人がくれた 8 ポーズの写真の切り抜き (g1〜g8: 構え・テークバック・クラブが真上・トップ・切り返し・インパクト・振り抜き・フィニッシュ)。
    構え (g1) のクラブの先を玉に重ね、ほかのポーズは前の足 (いちばん下の左はし) を同じ所にそろえる */
-const GFR=[{fx:26,fy:444,hx:285,hy:412},{fx:28,fy:429},{fx:55,fy:514},{fx:27,fy:428},{fx:36,fy:417},{fx:38,fy:417},{fx:30,fy:442},{fx:46,fy:472}];
+const GFR=[{fx:26,fy:444,hx:285,hy:412},{fx:28,fy:429},{fx:55,fy:514},{fx:27,fy:428},{fx:36,fy:417},{fx:38,fy:417},{fx:25,fy:399},{fx:46,fy:472}];
 GFR.forEach((f,i)=>{f.im=new Image();f.im.src=(window.__IMG&&window.__IMG[i])||`g${i+1}.webp`;});
 const GSC=0.0088;   // 玉の所の 1y あたりの点の数に掛ける (写真のマットの幅と人の背の高さから決めた)
 // いまのポーズ: ためている間はパワーで 構え→テークバック→真上→トップ、振ると 切り返し→インパクト→振り抜き→フィニッシュ
