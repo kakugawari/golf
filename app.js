@@ -55,11 +55,11 @@ function arcD(a0,a1,r){if(Math.abs(a1-a0)<0.5)a1=a0+0.5;const lo=Math.min(a0,a1)
 function angOf(p){return 90+p*ARC;}
 function ydOf(p){const c=CLUBS[G.club];const car=c.carry*p;return car+G.wind.z*car/60+c.roll*(0.4+0.6*p);}
 function pOf(y){const a=ydOf(0),b=ydOf(1);return (y-a)/(b-a);}
-function buildTicks(){const c=CLUBS[G.club];let h=`<circle cx="100" cy="100" r="100" fill="rgba(10,40,14,.38)"/><path d="${arcD(90,90+ARC,AR)}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="16" stroke-linecap="round"/>`;
+function buildTicks(){const c=CLUBS[G.club];let h=`<circle cx="100" cy="100" r="100" fill="rgba(12,20,15,.62)" stroke="rgba(255,255,255,.18)" stroke-width="1.5"/><path d="${arcD(90,90+ARC,AR)}" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="14" stroke-linecap="round"/>`;
  const mx=ydOf(1),st=mx>180?25:mx>90?10:5,big=mx>180?50:mx>90?50:25;for(let y=st;y<=mx;y+=st){if(pOf(y)<0.03)continue;const a=angOf(pOf(y)),b=y%big===0,p1=pt(a,AR+10),p2=pt(a,AR+(b?17:14));h+=`<line x1="${p1[0]}" y1="${p1[1]}" x2="${p2[0]}" y2="${p2[1]}" stroke="rgba(255,255,255,.8)" stroke-width="${b?2.5:1.5}"/>`;
-  if(b){const q=pt(a,AR+29);h+=`<text x="${q[0].toFixed(1)}" y="${(q[1]+5).toFixed(1)}" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" stroke="rgba(10,40,14,.55)" stroke-width="3" paint-order="stroke">${y}</text>`;}}
- const b0=pt(90,AR-12),b1=pt(90,AR+12);h+=`<line x1="${b0[0]}" y1="${b0[1]}" x2="${b1[0]}" y2="${b1[1]}" stroke="#173a1c" stroke-width="5" stroke-linecap="round"/>`;
- if(G.target){const r=pOf(G.target.z);if(r<=1.02&&r>0){const a=angOf(r),q=pt(a,AR),f=pt(a,AR-22),col=G.target.c;h+=`<line x1="${q[0]}" y1="${q[1]}" x2="${f[0]}" y2="${f[1]}" stroke="#fff" stroke-width="2"/><circle cx="${f[0]}" cy="${f[1]}" r="6" fill="${col}" stroke="#173a1c" stroke-width="2"/>`;}}
+  if(b){const q=pt(a,AR+29);h+=`<text x="${q[0].toFixed(1)}" y="${(q[1]+5).toFixed(1)}" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" stroke="rgba(0,0,0,.65)" stroke-width="3" paint-order="stroke">${y}</text>`;}}
+ const b0=pt(90,AR-12),b1=pt(90,AR+12);h+=`<line x1="${b0[0]}" y1="${b0[1]}" x2="${b1[0]}" y2="${b1[1]}" stroke="#ffd23f" stroke-width="5" stroke-linecap="round"/>`;
+ if(G.target){const r=pOf(G.target.z);if(r<=1.02&&r>0){const a=angOf(r),q=pt(a,AR),f=pt(a,AR-22),col=G.target.c;h+=`<line x1="${q[0]}" y1="${q[1]}" x2="${f[0]}" y2="${f[1]}" stroke="#fff" stroke-width="2"/><circle cx="${f[0]}" cy="${f[1]}" r="6" fill="${col}" stroke="#fff" stroke-width="2"/>`;}}
  $('arcbg').innerHTML=h;}
 $('clubs').addEventListener('pointerdown',e=>{e.stopPropagation();const b=e.target.closest('.club');if(!b||G.phase!=='ready')return;G.club=+b.dataset.i;buildClubs();setGauge();sfx.tick();});
 const _c=new Map();function setA(el,k,v){const key=el.id+'|'+k;if(_c.get(key)===v)return;_c.set(key,v);if(k==='text')el.textContent=v;else if(k[0]==='-'||k==='left'||k==='top'||k==='opacity')el.style.setProperty(k,v);else el.setAttribute(k,v);}
@@ -67,18 +67,19 @@ function setCls(el,c,on){if(el.classList.contains(c)!==on)el.classList.toggle(c,
 function setGauge(){const ph=G.phase,c=CLUBS[G.club];let v=0,a=90;
  if(ph==='power'){v=G.p;a=angOf(v);}else if(ph==='ring'){v=G.power;a=90+(angOf(v)-90)*(G.ring-G.r0)/(RING0-G.r0);}
  else if(['swing','flight','roll','rest'].includes(ph)){v=G.power;a=70;}
- const fill=$('afill');if(v>0){setA(fill,'d',arcD(90,angOf(v),AR));setA(fill,'stroke',`hsl(${Math.round(100-v*75)},85%,55%)`);setA(fill,'opacity',String(ph==='power'?1:ph==='ring'?0.35:0.55));}else setA(fill,'d','');
+ const fill=$('afill');if(v>0){setA(fill,'d',arcD(90,angOf(v),AR));setA(fill,'stroke','#ffd23f');setA(fill,'opacity',String(ph==='power'?1:ph==='ring'?0.35:0.55));}else setA(fill,'d','');
  const z=$('azone');if(ph==='ring'){const w=(angOf(G.power)-90)*RWIN*0.25/(RING0-G.r0);setA(z,'d',arcD(90-w,90+w,AR));setA(z,'stroke',Math.abs(G.ring-G.r0)<=RWIN*0.25?'#fff':'#ffd23f');}else setA(z,'d','');
  const q=pt(a,AR);setA($('amk'),'transform',`translate(${q[0].toFixed(1)} ${q[1].toFixed(1)})`);
  const sw=$('sw'),ok=ph==='ring'&&Math.abs(G.ring-G.r0)<=RWIN*0.25;setCls(sw,'now',ok);setCls(sw,'idle',ph==='ready');
- const yd=Math.round(ydOf(v))+'y';let L=ph==='ready'?['スイング','ながおし']:ph==='power'?[yd,'はなす!']:ph==='ring'?(ok?['いま!',yd]:['タップ!',yd]):ph==='rest'?(G.mode==='chal'&&G.left<=0?['けっか','はっぴょう']:['つぎへ','タップ']):[yd,'とんでる!'];
+ const yd=Math.round(ydOf(v))+'y';// ボタンには「いま何をするか」だけ。距離はゲージのまん中に 1 か所だけ出す (前はゲージ・ボタン・下の字の 3 か所に同じ距離が出ていた)
+ let L=ph==='ready'?['スイング','ながおし']:ph==='power'?['はなす','ちょうどで']:ph==='ring'?(ok?['いま!','']:['タップ','▲で']):ph==='rest'?(G.mode==='chal'&&G.left<=0?['けっか','はっぴょう']:['つぎへ','タップ']):['…',''];
  const D=[ph==='ready'?CLUBS[G.club].k:yd,ph==='ready'?'パワー':ph==='power'?'ためて…':''];
  setA($('dyd'),'text',D[0]);setA($('dys'),'text',ph==='ring'?(ok?'いま!':'▲でタップ'):D[1]);setA($('swb'),'text',L[0]);setA($('sws'),'text',L[1]);}
 function aimLab(){const v=Math.round((G.aim-(G.target?G.target.x/G.target.z:0))*100);if(G.phase==='ready')hint(v===0?(G.target?'ねらい:旗のほう':'ねらい:まっすぐ'):v>0?`ねらい:みぎ ${v}`:`ねらい:ひだり ${-v}`);}
-function hud(){$('hl').innerHTML=G.mode==='chal'?`のこり ${G.left}球<small>${G.shown}てん</small>`:'じゆうれんしゅう';
+function hud(){$('hl').innerHTML=G.mode==='chal'?`のこり<b>${G.left}</b>球<i></i><b>${G.shown}</b>てん`:'じゆうれんしゅう';
  const w=G.wind,m=Math.hypot(w.x,w.z);$('hw').style.visibility=G.mode==='chal'?'visible':'hidden';$('wv').textContent=m.toFixed(1)+'m';$('wa').style.transform=`rotate(${Math.atan2(w.x,w.z)*180/Math.PI}deg)`;
  const am=$('aimt');if(G.target){am.hidden=false;$('aimdot').style.background=G.target.c;$('aimtt').textContent=`${G.target.n}の旗 ${G.target.z}y`;}else am.hidden=true;
- $('aL').classList.toggle('off',G.phase!=='ready');$('aR').classList.toggle('off',G.phase!=='ready');$('clubs').style.opacity=G.phase==='ready'?1:0.55;}
+ $('aL').classList.toggle('off',G.phase!=='ready');$('aR').classList.toggle('off',G.phase!=='ready');$('clubs').style.opacity=G.phase==='ready'?1:0.4;}
 function hint(t){$('hint').textContent=t;}
 let popTimers=[];
 function mapSvg(dx,dz){const k=30/GR;let x=dx*k,y=-dz*k;const L=Math.hypot(x,y),out=L>44;if(out){x*=44/L;y*=44/L;}
@@ -250,7 +251,10 @@ function sign(x,z,n){const a=pr(x,0,z);if(!a||a.s>45)return;const s=a.s,w=7*s,h=
  ctx.fillStyle='#fffdf6';ctx.fillRect(a.x-w/2,y-h,w,h);ctx.fillStyle='#1d5e27';ctx.fillRect(a.x-w/2,y-h,w,h*0.18);if(h>7&&h<160){ctx.font=`800 ${h*0.62}px "M PLUS Rounded 1c",sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(n,a.x,y-h*0.42);}}
 function flag(t,time){const a=pr(t.x,0,t.z);if(!a||a.s>120||a.x<-200||a.x>W+200)return;const s=a.s,top=pr(t.x,3.4,t.z);ctx.strokeStyle='#eee';ctx.lineWidth=Math.max(1,0.08*s);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(top.x,top.y);ctx.stroke();
  const wv=Math.sin(time*6+t.z)*0.15*s,fw=1.4*s*(G.wind.x<0?-1:1);
- ctx.fillStyle=t.c;ctx.strokeStyle='rgba(0,0,0,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(top.x,top.y);ctx.quadraticCurveTo(top.x+fw*0.5,top.y+0.2*s+wv,top.x+fw,top.y+0.45*s);ctx.lineTo(top.x,top.y+0.9*s);ctx.fill();ctx.stroke();}
+ ctx.fillStyle=t.c;ctx.strokeStyle='rgba(0,0,0,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(top.x,top.y);ctx.quadraticCurveTo(top.x+fw*0.5,top.y+0.2*s+wv,top.x+fw,top.y+0.45*s);ctx.lineTo(top.x,top.y+0.9*s);ctx.fill();ctx.stroke();
+ if(G.target===t&&['ready','power','ring'].includes(G.phase)){const tx=`${t.z}y`;ctx.font='800 15px "M PLUS Rounded 1c",sans-serif';const w=ctx.measureText(tx).width+16,x=top.x-w/2,y=top.y-30;
+  ctx.fillStyle='rgba(12,20,15,.72)';ctx.beginPath();ctx.roundRect(x,y,w,22,6);ctx.fill();ctx.beginPath();ctx.moveTo(top.x-5,y+22);ctx.lineTo(top.x+5,y+22);ctx.lineTo(top.x,y+28);ctx.fill();
+  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(tx,top.x,y+12);}}
 function mat(){const pts=[pr(-2.6,0,-1.6),pr(2.2,0,-1.6),pr(2.2,0,1.6),pr(-2.6,0,1.6)];if(pts.some(p=>!p))return;ctx.fillStyle='#24602a';ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.fill();ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=2;ctx.stroke();}
 /* 打つ人は、使う人がくれた 8 ポーズの写真の切り抜き (g1〜g8: 構え・テークバック・クラブが真上・トップ・切り返し・インパクト・振り抜き・フィニッシュ)。
    構え (g1) のクラブの先を玉に重ね、ほかのポーズは前の足 (いちばん下の左はし) を同じ所にそろえる */
@@ -302,8 +306,8 @@ function parts(){for(const q of G.parts){const p=pr(q.x,q.y,q.z);if(!p)continue;
 function speedLines(){if(G.speed<=0)return;const a=Math.min(1,G.speed/0.6);ctx.strokeStyle=`rgba(255,255,255,${0.5*a})`;ctx.lineWidth=3;const o=pr(0,0,0)||{x:W/2,y:H*0.6},cx=o.x,cy=o.y;
  for(let i=0;i<22;i++){const t=i/22*Math.PI*2+i,r1=Math.max(W,H)*(0.35+0.1*Math.sin(i*7)),r2=r1+60+40*a;ctx.beginPath();ctx.moveTo(cx+Math.cos(t)*r1,cy+Math.sin(t)*r1);ctx.lineTo(cx+Math.cos(t)*r2,cy+Math.sin(t)*r2);ctx.stroke();}}
 function placeDial(){const d=$('dial'),ph=G.phase,show=['ready','power','ring'].includes(ph)||(ph==='swing')||(ph==='flight'&&G.t<0.35);
- setCls(d,'hide',!show);if(!show)return;const sz=Math.round(Math.min(230,W*0.56,H*0.3));setA(d,'--ds',sz+'px');
- const b=pr(0,0,0);if(!b)return;setA(d,'left',Math.round(Math.min(W-sz/2-26,b.x+sz*0.75))+'px');setA(d,'top',Math.round(Math.min(H-sz/2-250,Math.max(sz/2+110,b.y-sz*0.12)))+'px');}
+ setCls(d,'hide',!show);if(!show)return;const sz=150;setA(d,'--ds',sz+'px');
+ const b=pr(0,0,0);if(!b)return;setA(d,'left',Math.round(W-sz/2-24)+'px');setA(d,'top',Math.round(Math.min(H-sz/2-250,b.y-sz*0.55))+'px');}
 const bgEl=$('bg');let bgLast='';
 function camBg(sx,sy,z,o){const v=(sx||sy||z>1.0005)?`translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px) scale(${z.toFixed(4)})`:'';const tag=v+'|'+Math.round(o.x)+','+Math.round(o.y);if(tag===bgLast)return;bgLast=tag;
  bgEl.style.transformOrigin=`${o.x}px ${o.y}px`;bgEl.style.transform=v;}

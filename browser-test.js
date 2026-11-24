@@ -237,9 +237,20 @@ async function run() {
       const bad = await pg.evaluate(() => window.__shoot(1400, true));
       ok(bad && (bad.z < good.z || Math.abs(bad.x) > Math.abs(good.x) + 3), `遅れて押すと短いか曲がる (${bad && Math.round(bad.z)}y・横に ${bad && Math.round(bad.x)}y)`);
 
-      // 打った手ごたえ: インパクトの形で一瞬止まり、玉の所に光、写真ごとゆれて寄る。そのあと元に戻る
       await pg.evaluate(() => document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
       await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
+      // ゲージは右はしに小さく: 旗・ねらい線・クラブの札・ボタンに重ならない (前は画面のまん中に 230pt で、旗とねらい線を隠していた)
+      await pg.waitForFunction(() => getComputedStyle(document.getElementById('dial')).opacity === '1', null, { timeout: 3000 });
+      const lay = await pg.evaluate(() => { const A = window.__app, r = (q) => document.querySelector(q).getBoundingClientRect(), d = r('#dial');
+        const inD = (p) => p && p.x > d.left && p.x < d.right && p.y > d.top && p.y < d.bottom;
+        const flags = A.TG.filter((t) => inD(A.pr(t.x, 3.4, t.z)) || inD(A.pr(t.x, 0, t.z))).length;
+        let aim = 0; for (let z = 4; z < 220; z += 3) if (inD(A.pr(A.G.aim * z, 0, z))) aim++;
+        const hit = (q) => { const e = r(q); return !(e.right < d.left || e.left > d.right || e.bottom < d.top || e.top > d.bottom); };
+        return { w: Math.round(d.width), flags, aim, clubs: hit('#clubs'), sw: hit('#sw'), right: Math.round(d.right), W: innerWidth, vis: getComputedStyle(document.getElementById('dial')).opacity }; });
+      ok(lay.vis === '1' && lay.w <= 160 && lay.right <= lay.W, `ゲージは右はしに小さく出ている (幅 ${lay.w}pt・右はし ${lay.right}/${lay.W})`);
+      ok(lay.flags === 0 && lay.aim === 0 && !lay.clubs && !lay.sw, `ゲージが旗・ねらい線・クラブの札・ボタンに重ならない (旗 ${lay.flags}・ねらい線 ${lay.aim})`);
+
+      // 打った手ごたえ: インパクトの形で一瞬止まり、玉の所に光、写真ごとゆれて寄る。そのあと元に戻る
       const fx = await pg.evaluate(() => new Promise((done) => {
         const G = window.__app.G, sw = document.getElementById('sw'), bg = document.getElementById('bg');
         const ev = (t, el) => el.dispatchEvent(new PointerEvent(t, { bubbles: true }));
