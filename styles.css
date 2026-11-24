@@ -12,7 +12,7 @@ body{font:16px/1.4 "M PLUS Rounded 1c",system-ui,sans-serif;color:var(--ink);use
 /* 練習場の写真 (動かないので CSS の背景に敷く。canvas は動く物だけを描く) */
 #stage{position:absolute;inset:0;background:#7ec8f0 url(range.jpg) center/cover no-repeat}
 /* 写真をもう 1 枚重ね、打った瞬間はこちらをゆらして寄せる (下の #stage の写真がすき間を埋める) */
-#bg{position:absolute;inset:0;background:url(range.jpg) center/cover no-repeat;will-change:transform}
+#bg{position:absolute;inset:0;background:url(range.jpg) center/cover no-repeat;will-change:transform;transform-origin:0 0}
 #c{position:absolute;inset:0;width:100%;height:100%;display:block}
 /* プレイ中の HUD: 写真の上に置く「暗いガラス」の板 + 白い字 + 金色 1 色のアクセント (見本の Topgolf の画面に合わせた)。
    クリーム色の板や黄色い札は、写真の上で浮いて見えたのでやめた */
