@@ -247,23 +247,22 @@ function flag(t,time){const a=pr(t.x,0,t.z);if(!a||a.s>120||a.x<-200||a.x>W+200)
  const wv=Math.sin(time*6+t.z)*0.15*s,fw=1.4*s*(G.wind.x<0?-1:1);
  ctx.fillStyle=t.c;ctx.strokeStyle='rgba(0,0,0,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(top.x,top.y);ctx.quadraticCurveTo(top.x+fw*0.5,top.y+0.2*s+wv,top.x+fw,top.y+0.45*s);ctx.lineTo(top.x,top.y+0.9*s);ctx.fill();ctx.stroke();}
 function mat(){const pts=[pr(-2.6,0,-1.6),pr(2.2,0,-1.6),pr(2.2,0,1.6),pr(-2.6,0,1.6)];if(pts.some(p=>!p))return;ctx.fillStyle='#24602a';ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.fill();ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=2;ctx.stroke();}
-/* 打つ人は、使う人がくれた写真の切り抜き (g_addr 構え / g_fin フィニッシュ)。
-   構えのクラブの先が玉に重なるように置き、フィニッシュは同じ足もとに置く */
-const GIMG={addr:{src:'g_addr.webp',headX:331,headY:455,footX:90.8,footY:479},fin:{src:'g_fin.webp',footX:105.5,footY:500}};
-for(const k in GIMG){const im=new Image();im.src=(window.__IMG&&window.__IMG[k])||GIMG[k].src;GIMG[k].im=im;}
-const GSC=0.0082;   // 玉の所の 1y あたりの点の数に掛ける (写真のマットの幅から決めた)
-function golfer(){const b=pr(0,0,0);if(!b)return;const sc=b.s*GSC,A=GIMG.addr,Fn=GIMG.fin;
- const hx=b.x,hy=b.y,fx=hx+(A.footX-A.headX)*sc,fy=hy+(A.footY-A.headY)*sc;
- const fin=G.launched&&G.swT>=0.1;
- // 足もとの影
- ctx.fillStyle='rgba(0,0,0,.22)';ctx.beginPath();ctx.ellipse(fx+40*sc,fy,95*sc,16*sc,0,0,7);ctx.fill();
- if(!fin){if(A.im.complete&&A.im.naturalWidth)ctx.drawImage(A.im,hx-A.headX*sc,hy-A.headY*sc,A.im.naturalWidth*sc,A.im.naturalHeight*sc);}
- else if(Fn.im.complete&&Fn.im.naturalWidth)ctx.drawImage(Fn.im,fx-Fn.footX*sc,fy-Fn.footY*sc,Fn.im.naturalWidth*sc,Fn.im.naturalHeight*sc);
- // 振る瞬間 (構え→フィニッシュの切り替わり) は、クラブの通り道に風切りの線を重ねる
- const t=G.launched?G.swT:(G.phase==='swing'?G.swT:-1);
- if(t>=0&&t<0.32){const k=1-t/0.32,cx=fx+30*sc,cy=fy-260*sc,R=250*sc;ctx.save();ctx.lineCap='round';
-  for(let i=0;i<3;i++){ctx.strokeStyle=`rgba(255,255,255,${(0.55-i*0.15)*k})`;ctx.lineWidth=(10-i*3)*sc*6;ctx.beginPath();ctx.arc(cx,cy,R+i*14*sc,Math.PI*0.15,Math.PI*0.85);ctx.stroke();}
-  ctx.restore();}}
+/* 打つ人は、使う人がくれた 8 ポーズの写真の切り抜き (g1〜g8: 構え・テークバック・クラブが真上・トップ・切り返し・インパクト・振り抜き・フィニッシュ)。
+   構え (g1) のクラブの先を玉に重ね、ほかのポーズは前の足 (いちばん下の左はし) を同じ所にそろえる */
+const GFR=[{fx:26,fy:444,hx:285,hy:412},{fx:28,fy:429},{fx:55,fy:514},{fx:27,fy:428},{fx:36,fy:417},{fx:38,fy:417},{fx:30,fy:442},{fx:46,fy:472}];
+GFR.forEach((f,i)=>{f.im=new Image();f.im.src=(window.__IMG&&window.__IMG[i])||`g${i+1}.webp`;});
+const GSC=0.0088;   // 玉の所の 1y あたりの点の数に掛ける (写真のマットの幅と人の背の高さから決めた)
+// いまのポーズ: ためている間はパワーで 構え→テークバック→真上→トップ、振ると 切り返し→インパクト→振り抜き→フィニッシュ
+function poseIdx(){const ph=G.phase,bk=p=>p<0.2?0:p<0.45?1:p<0.75?2:3;
+ if(ph==='power')return bk(G.p);if(ph==='ring')return bk(G.power);
+ if(ph==='swing'&&!G.launched)return 4;
+ if(G.launched){const t=G.swT;return t<0.16?5:t<0.28?6:7;}
+ return 0;}
+function golfer(){const b=pr(0,0,0);if(!b)return;const sc=b.s*GSC,A=GFR[0];
+ const fx=b.x+(A.fx-A.hx)*sc,fy=b.y+(A.fy-A.hy)*sc;
+ ctx.fillStyle='rgba(0,0,0,.22)';ctx.beginPath();ctx.ellipse(fx+70*sc,fy,110*sc,16*sc,0,0,7);ctx.fill();
+ let i=poseIdx();if(!(GFR[i].im.complete&&GFR[i].im.naturalWidth))i=0;const f=GFR[i];
+ if(f.im.complete&&f.im.naturalWidth)ctx.drawImage(f.im,fx-f.fx*sc,fy-f.fy*sc,f.im.naturalWidth*sc,f.im.naturalHeight*sc);}
 function ball(){const b=G.ball,g=pr(b.x,0,b.z),p=pr(b.x,b.y,b.z);if(!p)return;const r=Math.max(2.2,0.075*p.s);
  if(g){ctx.fillStyle=`rgba(0,0,0,${0.3*Math.max(0.15,1-b.y/40)})`;ctx.beginPath();ctx.ellipse(g.x,g.y,r*1.1,r*0.4,0,0,7);ctx.fill();}
  if(b.z<1&&b.y<0.1&&g){ctx.strokeStyle='#ffe28a';ctx.lineWidth=Math.max(1,0.05*g.s);ctx.beginPath();ctx.moveTo(g.x,g.y);ctx.lineTo(p.x,p.y+r);ctx.stroke();}
@@ -298,7 +297,7 @@ function frame(now){requestAnimationFrame(frame);if(document.hidden){T0=now;retu
 buildClubs();hud();bestText();setGauge();requestAnimationFrame(frame);
 clearRun();
 // テストから中身をのぞく入口
-window.__app={G,CLUBS,TG,pr,GIMG,get size(){return {W,H};},get save(){return save;}};
+window.__app={G,CLUBS,TG,pr,GFR,poseIdx,get size(){return {W,H};},get save(){return save;}};
 
 }
 
