@@ -166,7 +166,47 @@ async function run() {
       });
       ok(fit.cv === 932 && fit.H === 932, `絵が画面いっぱい (canvas ${fit.cv} / H ${fit.H})`);
       ok(fit.sw <= fit.h - 34, `下の安全域を足しても、スイングのボタンが画面に収まる (ボタンの下 ${fit.sw})`);
+      // 背景は練習場の写真。写真の遠近に合わせて、玉はマットの上・旗は芝の上・奥ほど小さく描く
+      const pic = await pg.evaluate(async () => {
+        const bg = getComputedStyle(document.getElementById('stage')).backgroundImage;
+        const ok = await fetch('range.jpg').then((r) => r.ok).catch(() => false);
+        const { pr, TG } = window.__app, H = innerHeight, b = pr(0, 0, 0);
+        const flags = TG.map((t) => pr(t.x, 0, t.z));
+        return { bg, ok, ball: b.y / H, flagsY: flags.map((f) => f.y / H), flagsX: flags.map((f) => f.x / innerWidth),
+          farther: flags.slice(1).every((f, i) => f.s < flags[i].s) };
+      });
+      ok(/range\.jpg/.test(pic.bg) && pic.ok, '背景に練習場の写真を敷いている');
+      // 打つ人は写真の切り抜き 8 ポーズ。どれも読み込めている
+      const gim = await pg.evaluate(() => window.__app.GFR.map((f) => f.im.naturalWidth));
+      ok(gim.length === 8 && gim.every((w) => w > 0), `打つ人の写真 8 ポーズが読み込めている (${gim.join(', ')}px)`);
+      ok(pic.ball > 0.7 && pic.ball < 0.8, `玉はマットの上に描く (上から ${Math.round(pic.ball * 100)}%)`);
+      ok(pic.flagsY.every((y) => y > 0.46 && y < 0.6) && pic.flagsX.every((x) => x > 0.08 && x < 0.92) && pic.farther,
+        `旗はどれも芝の上 (上から ${pic.flagsY.map((y) => Math.round(y * 100)).join('/')}%)、遠いほど小さい`);
 
+      // スイングの流れ: ためている間にポーズが進み (構え→トップ)、打つと振り抜いてフィニッシュで止まる
+      await pg.locator('#bF').tap();
+      const seq = await pg.evaluate(() => new Promise((done) => {
+        const G = window.__app.G, sw = document.getElementById('sw'), seen = [];
+        const ev = (t, el) => el.dispatchEvent(new PointerEvent(t, { bubbles: true }));
+        const rec = () => { const i = window.__app.poseIdx(); if (seen[seen.length - 1] !== i) seen.push(i); };
+        ev('pointerdown', sw);
+        const t0 = performance.now();
+        const tick = () => { rec();
+          if (G.phase === 'power' && performance.now() - t0 > 1500) ev('pointerup', window);
+          if (G.phase === 'ring' && G.ring - G.r0 <= 2) ev('pointerdown', sw);
+          if (G.phase === 'rest') return done(seen);
+          if (performance.now() - t0 > 12000) return done(seen);
+          requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      }));
+      const up = seq.indexOf(3), fin = seq.lastIndexOf(7);
+      ok(seq[0] === 0 && up > 0 && seq.slice(0, up + 1).every((v, k, arr) => k === 0 || v >= arr[k - 1]) && fin > up && seq[seq.length - 1] === 7,
+        `ためるとトップまで上がり、打つとフィニッシュで止まる (ポーズの順 ${seq.join('→')})`);
+      // 次の球へ (タイトルへ戻して、次の確かめをいつもの入口から始める)
+      await pg.waitForFunction(() => window.__app.G.restT > 0.7, null, { timeout: 5000 });
+      await pg.evaluate(() => { document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); });
+      await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
+      await pg.evaluate(() => { document.getElementById('title').hidden = false; });
       // じゆうれんしゅう: ためて、▲で押すと、まっすぐ遠くへ飛ぶ。わざと遅れて押すと曲がって短い
       await pg.locator('#bF').tap();
       const good = await pg.evaluate(() => window.__shoot(1400, false));

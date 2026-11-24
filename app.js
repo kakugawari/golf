@@ -10,10 +10,10 @@ const CLUBS=[
  {id:'i7',k:'7I',name:'7番アイアン',carry:150,apex:26,roll:8},
  {id:'pw',k:'PW',name:'ウェッジ',carry:100,apex:24,roll:3}];
 const TG=[
- {z:60,x:-12,c:'#ff4d4d',n:'あか'},
- {z:100,x:10,c:'#ffd23f',n:'きいろ'},
- {z:140,x:-6,c:'#3d8bff',n:'あお'},
- {z:180,x:14,c:'#ffffff',n:'しろ'},
+ {z:60,x:-5,c:'#ff4d4d',n:'あか'},
+ {z:100,x:7,c:'#ffd23f',n:'きいろ'},
+ {z:140,x:-8,c:'#3d8bff',n:'あお'},
+ {z:180,x:10,c:'#ffffff',n:'しろ'},
  {z:220,x:-3,c:'#ff8a1f',n:'オレンジ'}];
 const GR=9,RING0=120,RSPD=90,RWIN=30,ARC=270,AR=78;
 
@@ -100,7 +100,7 @@ function bestText(){const f=save.far;$('best').textContent=`ベスト ${save.bes
 
 /* aim buttons: press-and-hold repeat */
 let aimTimer=null;
-function aimStep(d){if(G.phase!=='ready')return;G.aim=Math.max(-0.3,Math.min(0.3,G.aim+d*0.01));aimLab();sfx.aim();}
+function aimStep(d){if(G.phase!=='ready')return;G.aim=Math.max(-0.15,Math.min(0.15,G.aim+d*0.01));aimLab();sfx.aim();}
 function aimBind(el,d){el.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();aimStep(d);clearInterval(aimTimer);let n=0;aimTimer=setInterval(()=>{if(++n>3)aimStep(d);},80);});
  ['pointerup','pointerleave','pointercancel'].forEach(t=>el.addEventListener(t,()=>clearInterval(aimTimer)));}
 aimBind($('aL'),-1);aimBind($('aR'),1);
@@ -211,7 +211,12 @@ function update(dt){
  setGauge();}
 
 /* ---------- draw ---------- */
-function pr(x,y,z){const d=z-G.cam.z;if(d<0.6)return null;const s=F/d;return {x:W/2+(x-G.cam.x)*s,y:HY+(G.cam.h-y)*s,s};}
+/* 背景は打席から見た練習場の写真 (range.jpg 704x1520)。カメラは打席に固定し、写真の遠近に合わせて描く。
+   写真の上での値: 消える点 (VX,VY)、焦点 PF、目の高さ PH0、玉から目までの奥行き PCZ。
+   玉 (0,0,0) が写真の (352,1149) = 大きいマットの上、奥のネットの足もと (約 250y) が写真の 720 あたりに来るように合わせた */
+const PIC={w:704,h:1520,vx:352,vy:697,f:1520,h0:3.78,cz:-12.7};
+function picK(){return Math.max(W/PIC.w,H/PIC.h);}
+function pr(x,y,z){const d=z-PIC.cz;if(d<0.6)return null;const k=picK(),ox=(W-PIC.w*k)/2,oy=(H-PIC.h*k)/2,s=PIC.f*k/d;return {x:ox+PIC.vx*k+x*s,y:oy+PIC.vy*k+(PIC.h0-y)*s,s};}
 const clouds=Array.from({length:5},()=>({x:Math.random(),y:0.06+Math.random()*0.2,r:30+Math.random()*40,v:0.004+Math.random()*0.006}));
 const streaks=Array.from({length:26},()=>({x:Math.random(),y:Math.random(),l:0.5+Math.random()*0.8}));
 function sky(t){const g=ctx.createLinearGradient(0,0,0,HY);g.addColorStop(0,'#5fb6ea');g.addColorStop(1,'#d8f0fb');ctx.fillStyle=g;ctx.fillRect(-20,-20,W+40,HY+22);
@@ -227,8 +232,10 @@ function ground(){const c=G.cam;ctx.fillStyle='#3e9a3f';ctx.fillRect(-20,HY,W+40
  ctx.fillStyle='#2c6f33';ctx.beginPath();ctx.moveTo(-20,HY);for(let x=-20;x<=W+20;x+=8){ctx.lineTo(x,HY-6-Math.abs(Math.sin(x*0.09))*7-Math.abs(Math.sin(x*0.031))*6);}ctx.lineTo(W+20,far.y);ctx.lineTo(-20,far.y);ctx.fill();
  for(const sx of [-60,60]){const a=pr(sx,0,zn),b=pr(sx,0,340);if(!a||!b)continue;const e=sx<0?-W*4:W*5;ctx.fillStyle='rgba(20,60,20,.28)';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(e,b.y);ctx.lineTo(e,a.y);ctx.fill();}}
 function greens(){for(const t of [...TG].sort((a,b)=>b.z-a.z)){const p=pr(t.x,0,t.z),f=pr(t.x,0,t.z+GR);if(!p||!f)continue;const n=pr(t.x,0,t.z-GR);if(!n||GR*p.s>W*3||n.y-f.y>H*3)continue;const ny=n.y;const cy=(ny+f.y)/2,ry=Math.max(1,(ny-f.y)/2),rx=GR*p.s;
-  const on=G.target===t;ctx.fillStyle=on?'#8fe07d':'#6fcf62';ctx.beginPath();ctx.ellipse(p.x,cy,rx,ry,0,0,7);ctx.fill();ctx.strokeStyle=on?'#fff':'rgba(255,255,255,.45)';ctx.lineWidth=Math.min(on?3:1.5,ry*0.35);ctx.stroke();
-  ctx.fillStyle='rgba(255,255,255,.35)';ctx.beginPath();ctx.ellipse(p.x,cy,rx*0.35,ry*0.35,0,0,7);ctx.fill();}}
+  const on=G.target===t,ring=t.c;
+  ctx.fillStyle=on?'rgba(160,240,140,.5)':'rgba(140,225,120,.32)';ctx.beginPath();ctx.ellipse(p.x,cy,rx,ry,0,0,7);ctx.fill();
+  ctx.strokeStyle=ring;ctx.globalAlpha=on?1:.75;ctx.lineWidth=Math.max(1.5,Math.min(on?5:3,ry*0.4));ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=Math.max(1,Math.min(2,ry*0.2));ctx.beginPath();ctx.ellipse(p.x,cy,rx*0.45,ry*0.45,0,0,7);ctx.stroke();ctx.globalAlpha=1;}}
 function marks(){for(const m of G.marks){const p=pr(m.x,0,m.z);if(!p||p.s>200)continue;const r=Math.max(2,0.6*p.s);ctx.fillStyle='rgba(255,255,255,.7)';ctx.beginPath();ctx.ellipse(p.x,p.y,r,r*0.35,0,0,7);ctx.fill();}}
 function nets(){for(const sx of [-60,60]){for(let z=0;z<320;z+=40){const z1=Math.max(z,G.cam.z+1),z2=z+40;if(z2<=z1)continue;const a=pr(sx,0,z1),b=pr(sx,28,z1),c=pr(sx,28,z2),d=pr(sx,0,z2);if(!a||!d)continue;
   ctx.fillStyle='rgba(235,245,240,.13)';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(c.x,c.y);ctx.lineTo(d.x,d.y);ctx.fill();
@@ -240,21 +247,23 @@ function flag(t,time){const a=pr(t.x,0,t.z);if(!a||a.s>120||a.x<-200||a.x>W+200)
  const wv=Math.sin(time*6+t.z)*0.15*s,fw=1.4*s*(G.wind.x<0?-1:1);
  ctx.fillStyle=t.c;ctx.strokeStyle='rgba(0,0,0,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(top.x,top.y);ctx.quadraticCurveTo(top.x+fw*0.5,top.y+0.2*s+wv,top.x+fw,top.y+0.45*s);ctx.lineTo(top.x,top.y+0.9*s);ctx.fill();ctx.stroke();}
 function mat(){const pts=[pr(-2.6,0,-1.6),pr(2.2,0,-1.6),pr(2.2,0,1.6),pr(-2.6,0,1.6)];if(pts.some(p=>!p))return;ctx.fillStyle='#24602a';ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.fill();ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=2;ctx.stroke();}
-function golfer(){const base=pr(-1.05,0,0);if(!base||base.s>130)return;const s=base.s;const L=(x,y)=>[base.x+x*s,base.y-y*s];
- ctx.lineCap='round';ctx.lineJoin='round';
- ctx.fillStyle='rgba(0,0,0,.2)';ctx.beginPath();ctx.ellipse(base.x+0.1*s,base.y,0.55*s,0.12*s,0,0,7);ctx.fill();
- const seg=(pts,w,c)=>{ctx.strokeStyle=c;ctx.lineWidth=w*s;ctx.beginPath();pts.forEach((p,i)=>{const q=L(p[0],p[1]);i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);});ctx.stroke();};
- const fin=G.launched?ease((G.swT-0.1)/0.38):0;const hip=[0.0-fin*0.05,0.88],sh=[0.28-fin*0.12,1.36+fin*0.05];
- seg([[-0.12,0.05],[0.06,0.46],hip],0.2,'#2b3a67');seg([[0.16,0.05],[0.22-fin*0.1,0.46],hip],0.2,'#34467a');
- ctx.fillStyle='#fff';[[-0.12,0.04],[0.16,0.04]].forEach(p=>{const q=L(p[0]+0.06,p[1]);ctx.beginPath();ctx.ellipse(q[0],q[1],0.15*s,0.07*s,0,0,7);ctx.fill();});
- seg([hip,sh],0.38,'#ff6b5a');
- const hd=L(sh[0]+0.15,sh[1]+0.32);ctx.fillStyle='#ffd8b5';ctx.beginPath();ctx.arc(hd[0],hd[1],0.27*s,0,7);ctx.fill();
- ctx.fillStyle='#fffdf6';ctx.beginPath();ctx.arc(hd[0],hd[1]-0.03*s,0.28*s,Math.PI*1.02,Math.PI*1.98);ctx.fill();ctx.fillRect(hd[0],hd[1]-0.1*s,0.38*s,0.07*s);
- ctx.fillStyle='#ff6b5a';ctx.fillRect(hd[0]-0.28*s,hd[1]-0.1*s,0.56*s,0.04*s);
- const ca=Math.cos(ang),sa=Math.sin(ang),hand=[sh[0]+0.52*ca,sh[1]+0.52*sa],tip=[sh[0]+1.62*ca,sh[1]+1.62*sa];
- seg([hand,tip],0.05,'#8d969b');const tq=L(tip[0],tip[1]);ctx.fillStyle='#2d3133';ctx.beginPath();ctx.arc(tq[0],tq[1],0.09*s,0,7);ctx.fill();
- seg([sh,hand],0.16,'#ff6b5a');const hq=L(hand[0],hand[1]);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(hq[0],hq[1],0.1*s,0,7);ctx.fill();}
-function ball(){const b=G.ball,g=pr(b.x,0,b.z),p=pr(b.x,b.y,b.z);if(!p)return;const r=Math.max(2.6,0.2*p.s);
+/* 打つ人は、使う人がくれた 8 ポーズの写真の切り抜き (g1〜g8: 構え・テークバック・クラブが真上・トップ・切り返し・インパクト・振り抜き・フィニッシュ)。
+   構え (g1) のクラブの先を玉に重ね、ほかのポーズは前の足 (いちばん下の左はし) を同じ所にそろえる */
+const GFR=[{fx:26,fy:444,hx:285,hy:412},{fx:28,fy:429},{fx:55,fy:514},{fx:27,fy:428},{fx:36,fy:417},{fx:38,fy:417},{fx:25,fy:399},{fx:46,fy:472}];
+GFR.forEach((f,i)=>{f.im=new Image();f.im.src=(window.__IMG&&window.__IMG[i])||`g${i+1}.webp`;});
+const GSC=0.0088;   // 玉の所の 1y あたりの点の数に掛ける (写真のマットの幅と人の背の高さから決めた)
+// いまのポーズ: ためている間はパワーで 構え→テークバック→真上→トップ、振ると 切り返し→インパクト→振り抜き→フィニッシュ
+function poseIdx(){const ph=G.phase,bk=p=>p<0.2?0:p<0.45?1:p<0.75?2:3;
+ if(ph==='power')return bk(G.p);if(ph==='ring')return bk(G.power);
+ if(ph==='swing'&&!G.launched)return 4;
+ if(G.launched){const t=G.swT;return t<0.16?5:t<0.28?6:7;}
+ return 0;}
+function golfer(){const b=pr(0,0,0);if(!b)return;const sc=b.s*GSC,A=GFR[0];
+ const fx=b.x+(A.fx-A.hx)*sc,fy=b.y+(A.fy-A.hy)*sc;
+ ctx.fillStyle='rgba(0,0,0,.22)';ctx.beginPath();ctx.ellipse(fx+70*sc,fy,110*sc,16*sc,0,0,7);ctx.fill();
+ let i=poseIdx();if(!(GFR[i].im.complete&&GFR[i].im.naturalWidth))i=0;const f=GFR[i];
+ if(f.im.complete&&f.im.naturalWidth)ctx.drawImage(f.im,fx-f.fx*sc,fy-f.fy*sc,f.im.naturalWidth*sc,f.im.naturalHeight*sc);}
+function ball(){const b=G.ball,g=pr(b.x,0,b.z),p=pr(b.x,b.y,b.z);if(!p)return;const r=Math.max(2.2,0.075*p.s);
  if(g){ctx.fillStyle=`rgba(0,0,0,${0.3*Math.max(0.15,1-b.y/40)})`;ctx.beginPath();ctx.ellipse(g.x,g.y,r*1.1,r*0.4,0,0,7);ctx.fill();}
  if(b.z<1&&b.y<0.1&&g){ctx.strokeStyle='#ffe28a';ctx.lineWidth=Math.max(1,0.05*g.s);ctx.beginPath();ctx.moveTo(g.x,g.y);ctx.lineTo(p.x,p.y+r);ctx.stroke();}
  if(G.phase==='flight'&&G.nice){const gl=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*4);gl.addColorStop(0,'rgba(255,230,120,.7)');gl.addColorStop(1,'rgba(255,230,120,0)');ctx.fillStyle=gl;ctx.beginPath();ctx.arc(p.x,p.y,r*4,0,7);ctx.fill();}
@@ -262,7 +271,7 @@ function ball(){const b=G.ball,g=pr(b.x,0,b.z),p=pr(b.x,b.y,b.z);if(!p)return;co
  if(G.phase==='rest'&&g){const k=(G.restT*1.5)%1,rr=r*2+k*r*6;ctx.strokeStyle=`rgba(255,255,255,${1-k})`;ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(g.x,g.y,rr,rr*0.4,0,0,7);ctx.stroke();}
 }
 function trail(){const t=G.trail;if(t.length<2)return;const col=G.nice?'255,214,64':'255,255,255';ctx.lineCap='round';
- for(let i=1;i<t.length;i++){const a=pr(t[i-1].x,t[i-1].y,t[i-1].z),b=pr(t[i].x,t[i].y,t[i].z);if(!a||!b)continue;const k=i/t.length;ctx.strokeStyle=`rgba(${col},${0.85*k})`;ctx.lineWidth=1.5+k*(G.nice?5:3);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}
+ for(let i=1;i<t.length;i++){const a=pr(t[i-1].x,t[i-1].y,t[i-1].z),b=pr(t[i].x,t[i].y,t[i].z);if(!a||!b)continue;const k=i/t.length;ctx.strokeStyle=`rgba(${col},${0.85*k})`;ctx.lineWidth=Math.max(1,Math.min(G.nice?7:5,b.s*(G.nice?0.09:0.06)))*(0.4+0.6*k);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}
 function aimLine(time){if(!['ready','power','ring'].includes(G.phase))return;const a=G.aim,zEnd=G.target?G.target.z:160;
  for(let z=4;z<zEnd;z+=z<40?3:6){const p=pr(a*z,0,z);if(!p)continue;const ph=((z*0.15-time*3)%1+1)%1;const r=Math.min(30,Math.max(1.6,0.25*p.s));ctx.fillStyle=`rgba(255,255,255,${0.45+0.5*ph})`;ctx.beginPath();ctx.ellipse(p.x,p.y,r,r*0.4,0,0,7);ctx.fill();}
  const e=pr(a*zEnd,0,zEnd);if(e){const rr=Math.max(6,4*e.s);ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.beginPath();ctx.ellipse(e.x,e.y,rr,rr*0.35,0,0,7);ctx.stroke();ctx.beginPath();ctx.moveTo(e.x,e.y-rr*0.35);ctx.lineTo(e.x,e.y-rr*1.4);ctx.stroke();}}
@@ -277,9 +286,9 @@ function placeDial(){const d=$('dial'),ph=G.phase,show=['ready','power','ring'].
  const b=pr(0,0,0);if(!b)return;setA(d,'left',Math.round(Math.min(W-sz/2-26,b.x+sz*0.75))+'px');setA(d,'top',Math.round(Math.min(H-sz/2-250,Math.max(sz/2+110,b.y-sz*0.12)))+'px');}
 let T0=performance.now(),TT=0;
 function frame(now){requestAnimationFrame(frame);if(document.hidden){T0=now;return;}const dt=Math.min(0.05,Math.max(0,(now-T0)/1000));T0=now;TT+=dt;try{update(dt);placeDial();}catch(e){console.error(e);}
- ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.save();try{if(G.shake>0)ctx.translate((Math.random()-0.5)*G.shake,(Math.random()-0.5)*G.shake);
- sky(TT);ground();greens();marks();mat();aimLine(TT);nets();
- const objs=[];for(const z of [50,100,150,200,250,300]){objs.push({z,f:()=>sign(-40,z,z)});objs.push({z,f:()=>sign(40,z,z)});}
+ ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.save();try{if(G.shake>0)ctx.translate((Math.random()-0.5)*G.shake,(Math.random()-0.5)*G.shake);
+ greens();marks();aimLine(TT);
+ const objs=[];
  for(const t of TG)objs.push({z:t.z,f:()=>flag(t,TT)});objs.push({z:0.01,f:golfer});objs.push({z:G.ball.z,f:()=>{trail();ball();}});
  objs.sort((a,b)=>b.z-a.z).forEach(o=>o.f());parts();windFx(dt);speedLines();
  }catch(e){console.error(e);}finally{ctx.restore();}
@@ -288,7 +297,7 @@ function frame(now){requestAnimationFrame(frame);if(document.hidden){T0=now;retu
 buildClubs();hud();bestText();setGauge();requestAnimationFrame(frame);
 clearRun();
 // テストから中身をのぞく入口
-window.__app={G,CLUBS,TG,get size(){return {W,H};},get save(){return save;}};
+window.__app={G,CLUBS,TG,pr,GFR,poseIdx,get size(){return {W,H};},get save(){return save;}};
 
 }
 
