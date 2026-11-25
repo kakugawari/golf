@@ -54,24 +54,24 @@ body{font:16px/1.4 "M PLUS Rounded 1c",system-ui,sans-serif;color:var(--ink);use
 .sw.idle{animation:breathe 1.6s ease-in-out infinite}
 @keyframes breathe{50%{box-shadow:0 0 0 4px var(--gold),0 0 0 12px rgba(255,210,63,.28),0 8px 20px rgba(0,0,0,.45)}}
 .hint{color:#fff;text-align:center;font-weight:800;font-size:15px;margin-top:8px;text-shadow:0 1px 3px rgba(0,0,0,.8);min-height:22px;pointer-events:none}
-.pop{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 92px);width:min(340px,88%);transform:translate(-50%,-40px) scale(.85);opacity:0;pointer-events:none;background:var(--glass2);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:20px;box-shadow:0 14px 30px rgba(0,0,0,.35);text-align:center;overflow:hidden;color:#fff}
+.pop{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 86px);width:min(300px,80%);transform:translate(-50%,-40px) scale(.85);opacity:0;pointer-events:none;background:var(--glass2);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:20px;box-shadow:0 14px 30px rgba(0,0,0,.35);text-align:center;overflow:hidden;color:#fff}
 .pop.on{opacity:1;transform:translate(-50%,0) scale(1);transition:opacity .15s,transform .45s cubic-bezier(.3,1.7,.5,1)}
-.rib{padding:8px 10px;font-weight:800;font-size:22px;color:#fff;background:#5b8a63;letter-spacing:.02em}
+.rib{padding:5px 10px;font-weight:800;font-size:19px;color:#fff;background:#5b8a63;letter-spacing:.02em}
 .rib.gold{background:linear-gradient(#ffd84d,#f2a900);color:#5a3d00}
 .rib.green{background:var(--g)}
 .rib.miss{background:#6c736e}
-.pbody{display:flex;align-items:center;justify-content:center;gap:14px;padding:10px 14px 0}
-#pmap{width:96px;height:96px;flex:none}
+.pbody{display:flex;align-items:center;justify-content:center;gap:12px;padding:6px 12px 0}
+#pmap{width:64px;height:64px;flex:none}
 #pmap[hidden]{display:none}
 .pnum{display:flex;flex-direction:column;align-items:center}
 .pnum .big{font-weight:800;line-height:1;color:#fff;white-space:nowrap}
-.pnum .big b{font-size:64px;font-variant-numeric:tabular-nums}
+.pnum .big b{font-size:46px;font-variant-numeric:tabular-nums}
 .pnum .big span{font-size:20px;margin-left:2px}
 .stars{display:flex;gap:4px;margin-top:4px}
-.stars i{font-style:normal;font-size:28px;line-height:1;color:rgba(255,255,255,.22);transform:scale(1);transition:transform .25s cubic-bezier(.3,2,.5,1),color .1s}
+.stars i{font-style:normal;font-size:20px;line-height:1;color:rgba(255,255,255,.22);transform:scale(1);transition:transform .25s cubic-bezier(.3,2,.5,1),color .1s}
 .stars i.on{color:#ffc400;transform:scale(1.25);text-shadow:0 2px 0 #9a6d00}
 .stars i.on.done{transform:scale(1)}
-.pop .s{font-weight:800;font-size:15px;color:rgba(255,255,255,.8);padding:8px 14px 14px}
+.pop .s{font-weight:800;font-size:13px;color:rgba(255,255,255,.8);padding:4px 12px 9px}
 .bl.bump,.pill.bump{animation:bump .45s cubic-bezier(.3,2,.5,1)}
 @keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}
 .ov{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:20px 16px calc(env(safe-area-inset-bottom) + 20px);background:linear-gradient(rgba(0,0,0,0),rgba(8,36,12,.5));touch-action:manipulation}
@@ -111,4 +111,22 @@ body{font:16px/1.4 "M PLUS Rounded 1c",system-ui,sans-serif;color:var(--ink);use
 .shots{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:14px 0 4px}
 .shots div{background:rgba(255,255,255,.08);color:#fff;border-radius:10px;text-align:center;padding:6px 0;font-weight:800;font-size:15px}
 .shots small{display:block;font-size:10px;color:var(--gold);letter-spacing:-1px;min-height:13px}
+/* (1) 飛んでいるあいだの距離 (画面のまん中の少し上) と (3) ナイスの連続の札 */
+.live{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 96px);text-align:center;color:#fff;font-weight:800;line-height:1;pointer-events:none;opacity:0;transform:scale(.8);transition:opacity .15s,transform .2s;text-shadow:0 2px 10px rgba(0,0,0,.55),0 0 2px rgba(0,0,0,.8)}
+.live.on{opacity:1;transform:scale(1)}
+.live b{font-size:72px;font-variant-numeric:tabular-nums}
+.live span{font-size:28px;margin-left:2px}
+.live.gold{color:var(--gold)}
+.combo{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 176px);transform:translateX(-50%) scale(.6);opacity:0;pointer-events:none;padding:5px 14px;border-radius:999px;font-weight:800;font-size:16px;color:var(--on);background:linear-gradient(90deg,#ff5f6d,#ffc371,#ffe66d,#7bf1a8,#6ec3ff,#c18cff);white-space:nowrap;transition:opacity .15s,transform .3s cubic-bezier(.3,1.8,.5,1)}
+.combo.on{opacity:1;transform:translateX(-50%) scale(1)}
+/* (6) 打っているあいだはクラブの帯とボタンを下へ引っこめ、玉と練習場だけを見せる。止まったら「つぎへ」だけ出す */
+.panel{transition:transform .28s ease}
+.panel.away{transform:translateY(calc(100% + 20px))}
+.panel .clubs{transition:opacity .2s,transform .25s}
+.panel.rest .clubs,.panel.rest .ab{opacity:0!important;pointer-events:none}
+/* (5) ランクの判子の色 */
+.stamp.rS{border-color:#ffd23f;color:#b88a00}
+.stamp.rA{border-color:#e2402b;color:#e2402b}
+.stamp.rB{border-color:#2f8f3a;color:#2f8f3a}
+.stamp.rC,.stamp.rD{border-color:#5d7385;color:#5d7385}
 @media (prefers-reduced-motion:reduce){.sw.idle{animation:none}.pop.on{transition:none}.pill.bump{animation:none}}
