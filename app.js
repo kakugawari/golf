@@ -258,9 +258,11 @@ function ground(){const c=G.cam;ctx.fillStyle='#3e9a3f';ctx.fillRect(-20,HY,W+40
  for(const sx of [-60,60]){const a=pr(sx,0,zn),b=pr(sx,0,340);if(!a||!b)continue;const e=sx<0?-W*4:W*5;ctx.fillStyle='rgba(20,60,20,.28)';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(e,b.y);ctx.lineTo(e,a.y);ctx.fill();}}
 function greens(){for(const t of [...TG].sort((a,b)=>b.z-a.z)){const p=pr(t.x,0,t.z),f=pr(t.x,0,t.z+GR);if(!p||!f)continue;const n=pr(t.x,0,t.z-GR);if(!n||GR*p.s>W*3||n.y-f.y>H*3)continue;const ny=n.y;const cy=(ny+f.y)/2,ry=Math.max(1,(ny-f.y)/2),rx=GR*p.s;
   const on=G.target===t,ring=t.c;
-  ctx.fillStyle=on?'rgba(160,240,140,.5)':'rgba(140,225,120,.32)';ctx.beginPath();ctx.ellipse(p.x,cy,rx,ry,0,0,7);ctx.fill();
-  ctx.strokeStyle=ring;ctx.globalAlpha=on?1:.75;ctx.lineWidth=Math.max(1.5,Math.min(on?5:3,ry*0.4));ctx.stroke();
-  ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=Math.max(1,Math.min(2,ry*0.2));ctx.beginPath();ctx.ellipse(p.x,cy,rx*0.45,ry*0.45,0,0,7);ctx.stroke();ctx.globalAlpha=1;}}
+  // ねらいうちでは、ねらう旗のグリーンだけをはっきり出し、ほかの丸はうすくする (「ほかの色の丸は無くすか薄く」と言われた)
+  const dim=G.target&&!on?0.18:1;
+  ctx.globalAlpha=dim;ctx.fillStyle=on?'rgba(160,240,140,.5)':'rgba(140,225,120,.32)';ctx.beginPath();ctx.ellipse(p.x,cy,rx,ry,0,0,7);ctx.fill();
+  ctx.strokeStyle=ring;ctx.globalAlpha=(on?1:.75)*dim;ctx.lineWidth=Math.max(1.5,Math.min(on?5:3,ry*0.4));ctx.stroke();
+  ctx.globalAlpha=dim;ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=Math.max(1,Math.min(2,ry*0.2));ctx.beginPath();ctx.ellipse(p.x,cy,rx*0.45,ry*0.45,0,0,7);ctx.stroke();ctx.globalAlpha=1;}}
 function marks(){for(const m of G.marks){const p=pr(m.x,0,m.z);if(!p||p.s>200)continue;const r=Math.max(2,0.6*p.s);ctx.fillStyle='rgba(255,255,255,.7)';ctx.beginPath();ctx.ellipse(p.x,p.y,r,r*0.35,0,0,7);ctx.fill();}}
 function nets(){for(const sx of [-60,60]){for(let z=0;z<320;z+=40){const z1=Math.max(z,G.cam.z+1),z2=z+40;if(z2<=z1)continue;const a=pr(sx,0,z1),b=pr(sx,28,z1),c=pr(sx,28,z2),d=pr(sx,0,z2);if(!a||!d)continue;
   ctx.fillStyle='rgba(235,245,240,.13)';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(c.x,c.y);ctx.lineTo(d.x,d.y);ctx.fill();

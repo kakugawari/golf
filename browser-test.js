@@ -329,6 +329,17 @@ async function run() {
         });
       });
       await pg.locator('#bC').tap();
+      // ねらう旗のグリーンだけはっきり、ほかの丸はうすく (1 コマぶん、輪を描くときの濃さを控える)
+      const rings = await pg.evaluate(() => new Promise((done) => {
+        const c = document.getElementById('c').getContext('2d'), A = window.__app, cols = A.TG.map((t) => t.c), seen = {}, st = c.stroke;
+        c.stroke = function (...a) { const k = String(this.strokeStyle).toLowerCase(); const i = cols.findIndex((x) => x.toLowerCase() === k);
+          if (i >= 0) seen[i] = Math.max(seen[i] || 0, this.globalAlpha); return st.apply(this, a); };
+        requestAnimationFrame(() => requestAnimationFrame(() => { c.stroke = st; done({ seen, on: A.TG.indexOf(A.G.target), white: cols.findIndex((x) => x.toLowerCase() === '#ffffff') }); }));
+      }));
+      // 白い旗の輪は、ねらいの印 (白い輪) と色が同じで見分けられないので数えない
+      const others = Object.entries(rings.seen).filter(([i]) => +i !== rings.on && rings.white !== +i).map(([, a]) => a);
+      ok(rings.seen[rings.on] === 1 && others.length > 0 && others.every((a) => a <= 0.2),
+        `ねらう旗の丸だけはっきり、ほかの丸はうすい (ねらう丸の濃さ ${rings.seen[rings.on]}・ほか ${others.map((a) => a.toFixed(2)).join('/')})`);
       let shots = 0;
       for (let i = 0; i < 10; i++) {
         const z = await pg.evaluate(() => window.__app.G.target.z);
