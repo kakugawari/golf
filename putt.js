@@ -20,10 +20,30 @@
   const S = { on: false, hole: 0, strokes: 0, cards: [], state: 'aim', ball: null, v: { x: 0, z: 0 }, prev: null, lipped: false, sunk: false, drag: null, sinkT: 0, msg: '', msgT: 0, t: 0, parts: [] };
   const hole = () => P.HOLES[S.hole], pic = () => P.PICS[hole().pic];
   function fit() { const k = Math.max(W / pic().w, H / pic().h); return { k, ox: (W - pic().w * k) / 2, oy: (H - pic().h * k) / 2 }; }
-  function scr(x, z) { const p = P.toPic(pic(), x, z), f = fit(); return { x: f.ox + p.X * f.k, y: f.oy + p.Y * f.k, s: p.s * f.k }; }
-  function ground(sx, sy) { const f = fit(), pc = pic(); let Y = (sy - f.oy) / f.k; Y = Math.max(pc.vy + 8, Y); return P.toWorld(pc, (sx - f.ox) / f.k, Y); }
+  // 寄らない (絵が画面ぴったり) ときの画面の位置
+  function base(x, z) { const p = P.toPic(pic(), x, z), f = fit(); return { x: f.ox + p.X * f.k, y: f.oy + p.Y * f.k, s: p.s * f.k }; }
+  /* カメラ: 玉がカップに近づくほど、カップを中心に絵ごと寄る (「ピンに近づいたら背景も近くに」と言われた)。
+     寄りの倍率 CAM.z は、玉が画面の下 (高さの 74%) に来るように決める。寄るにつれてカップも画面のまん中 (50%) へ下ろす (歩いて近づいた見え方)。
+     寄る中心 (横はカップ・縦は camFy) は画面の中なので、絵が画面からはみ出してすき間が出ることはない */
+  const CAM = { z: 1 }, CAMMAX = 3, BALLY = 0.74, CUPY = 0.5;
+  function camFy(Z) { const c0 = cupBase(), u = (Z - 1) / (CAMMAX - 1), cupT = c0.y + Math.max(0, H * CUPY - c0.y) * u; return Z > 1.0001 ? (c0.y * Z - cupT) / (Z - 1) : c0.y; }
+  function cupBase() { const c = P.cupOf(pic()); return base(c.x, c.z); }
+  function camTarget() {
+    const c0 = cupBase(), b0 = base(S.ball.x, S.ball.z), dy = b0.y - c0.y, dx = b0.x - c0.x;
+    // 玉の y = カップの行き先 + dy*Z が 74% に来る Z を、少しずつ近づけて求める (カップの行き先も Z で変わるので)
+    let z = 1; for (let i = 0; i < 30; i++) { const u = (z - 1) / (CAMMAX - 1), cupT = c0.y + Math.max(0, H * CUPY - c0.y) * u; z = dy > 1 ? (H * BALLY - cupT) / dy : CAMMAX; z = Math.max(1, Math.min(CAMMAX, z)); }
+    if (dx > 1) z = Math.min(z, (W - 34 - c0.x) / dx); else if (dx < -1) z = Math.min(z, (c0.x - 34) / -dx);   // 玉が横の画面の外へ出ないように
+    return Math.max(1, Math.min(CAMMAX, z));
+  }
+  function scr(x, z) { const c0 = cupBase(), p = base(x, z), Z = CAM.z, fy = camFy(Z); return { x: c0.x + (p.x - c0.x) * Z, y: fy + (p.y - fy) * Z, s: p.s * Z }; }
+  function ground(sx, sy) {
+    const c0 = cupBase(), Z = CAM.z, fy = camFy(Z), f = fit(), pc = pic(), bx = c0.x + (sx - c0.x) / Z, by = fy + (sy - fy) / Z;
+    let Y = (by - f.oy) / f.k; Y = Math.max(pc.vy + 8, Y); return P.toWorld(pc, (bx - f.ox) / f.k, Y);
+  }
+  let camLast = '';
+  function placeCam() { const c0 = cupBase(), Z = CAM.z, fy = camFy(Z), v = `matrix(${Z.toFixed(4)},0,0,${Z.toFixed(4)},${(c0.x * (1 - Z)).toFixed(1)},${(fy * (1 - Z)).toFixed(1)})`; if (v !== camLast) { camLast = v; $('pbg').style.transform = v; } }
   function resize() { const w = root.clientWidth, h = root.clientHeight; if (!(w >= 1 && h >= 1)) return; W = w; H = h; DPR = Math.min(2, devicePixelRatio || 1); cv.width = W * DPR; cv.height = H * DPR; placeBg(); }
-  function placeBg() { if (!(W >= 1)) return; const f = fit(), pc = pic(); root.style.backgroundImage = `url(${pc.src})`; root.style.backgroundSize = `${pc.w * f.k}px ${pc.h * f.k}px`; root.style.backgroundPosition = `${f.ox}px ${f.oy}px`; }
+  function placeBg() { if (!(W >= 1)) return; const f = fit(), pc = pic(), bg = $('pbg').style; bg.backgroundImage = `url(${pc.src})`; bg.backgroundSize = `${pc.w * f.k}px ${pc.h * f.k}px`; bg.backgroundPosition = `${f.ox}px ${f.oy}px`; camLast = ''; placeCam(); }
   addEventListener('resize', resize);
 
   // ---------- 流れ ----------
@@ -33,7 +53,7 @@
   }
   function setHole(i) {
     S.hole = i; S.strokes = 0; S.state = 'aim'; S.ball = P.startOf(hole()); S.prev = { ...S.ball }; S.v = { x: 0, z: 0 };
-    S.lipped = false; S.sunk = false; S.parts = []; S.drag = null; placeBg(); hideCard(); hud(); hint('ボールから うしろへ ひいて、はなすと うつ');
+    S.lipped = false; S.sunk = false; S.parts = []; S.drag = null; CAM.z = 1; placeBg(); hideCard(); hud(); hint('ボールから うしろへ ひいて、はなすと うつ');
   }
   function quit() { S.on = false; root.hidden = true; $('pover').hidden = true; $('title').hidden = false; }
   function shoot(angle, power) {
@@ -114,6 +134,8 @@
   // ---------- 動き ----------
   function update(dt) {
     S.t += dt; if (S.msgT > 0) S.msgT -= dt;
+    if (S.state === 'aim' && !S.drag) { const t = camTarget(); CAM.z += (t - CAM.z) * Math.min(1, dt * 2.2); if (Math.abs(t - CAM.z) < 0.002) CAM.z = t; }
+    placeCam();
     for (const q of S.parts) { q.vy += 520 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; q.rot += dt * 8; }
     S.parts = S.parts.filter((q) => q.life > 0 && q.y < H + 40);
     if (S.state === 'roll') {
@@ -145,10 +167,10 @@
   }
   function distTag(b, c, cp) {
     const tx = `${Math.hypot(c.x - b.x, c.z - b.z).toFixed(1)}m`;
-    ctx.font = '800 15px "M PLUS Rounded 1c",sans-serif'; const w = ctx.measureText(tx).width + 16, x = cp.x - w / 2, y = cp.y + 14;   // カップの下 (上だと旗の棒に重なる)
+    ctx.font = '800 15px "M PLUS Rounded 1c",sans-serif'; const w = ctx.measureText(tx).width + 16, x = cp.x + Math.max(16, cp.s * 0.15), y = cp.y - 11;   // カップの右 (上だと旗の棒、下だと近づいた玉に重なる)
     ctx.fillStyle = 'rgba(12,20,15,.72)'; ctx.beginPath(); ctx.roundRect(x, y, w, 22, 6); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cp.x - 5, y); ctx.lineTo(cp.x + 5, y); ctx.lineTo(cp.x, y - 6); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(tx, cp.x, y + 12);
+    ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(x, y + 16); ctx.lineTo(x - 6, y + 11); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(tx, x + w / 2, y + 12);
   }
   function aimGuide(b, bp, c) {
     const a = aimOf({ x: S.drag.x - S.drag.cx, y: S.drag.y - S.drag.cy }); if (!a) return;
@@ -192,5 +214,5 @@
   function loop(now) { if (!S.on) return; requestAnimationFrame(loop); const dt = Math.min(0.05, Math.max(0, (now - T0) / 1000)); T0 = now; if (document.hidden) return; update(dt); draw(); }
 
   // テストから中身をのぞく入口
-  window.__putt = { S, start, setHole, shoot, scr, ground, aimOf, next, finish, get save() { return save; } };
+  window.__putt = { S, CAM, camTarget, start, setHole, shoot, scr, ground, aimOf, next, finish, get save() { return save; } };
 })();
