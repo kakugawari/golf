@@ -314,6 +314,47 @@ async function run() {
       ok(fx.imp && fx.moved, '当たった瞬間に玉の所が光り、写真ごとゆれて寄る');
       ok(fx.after && fx.after.shake === 0 && fx.after.imp === null && fx.after.kick === 0, '玉が止まるころには、ゆれも寄りも光も元に戻っている');
 
+      // 爽快感の改修 (2026-11): 飛んでいる間の距離・ナイスの連続・画面を軽く・ねらいを指で・カップイン・小さい点数の札
+      await pg.reload({ waitUntil: 'load' });
+      await pg.locator('#bF').tap();
+      // (8) 芝の上を左右になぞるとねらいが変わり、パワーはたまらない
+      await pg.waitForTimeout(300);
+      const aim0 = await pg.evaluate(() => window.__app.G.aim);
+      await pg.mouse.move(215, 450); await pg.mouse.down();
+      for (let i = 1; i <= 8; i++) { await pg.mouse.move(215 + i * 8, 450); await pg.waitForTimeout(16); }
+      await pg.mouse.up();
+      const dr = await pg.evaluate(() => ({ aim: window.__app.G.aim, ph: window.__app.G.phase }));
+      ok(dr.aim > aim0 + 0.03 && dr.ph === 'ready', `芝の上を右へなぞると、ねらいが右へ動く (${aim0} → ${dr.aim.toFixed(3)}・${dr.ph})`);
+      await pg.evaluate(() => { window.__app.G.aim = 0; window.__app.G.combo = 2; });
+      // (1)(3)(6) 飛んでいる間: 距離が数えあがる・3 連続ナイスの札と虹色の跡・下の帯とボタンは引っこむ。止まったら「つぎへ」だけ
+      const fl = await pg.evaluate(() => new Promise((done) => {
+        const A = window.__app, G = A.G, sw = document.getElementById('sw'), ev = (t, el) => el.dispatchEvent(new PointerEvent(t, { bubbles: true }));
+        const r = { n: [], away: false, combo: false, rainbow: false };
+        ev('pointerdown', sw); setTimeout(() => ev('pointerup', window), 1400);
+        const tick = () => {
+          if (G.phase === 'ring' && G.ring - G.r0 <= 0.5) ev('pointerdown', sw);
+          if (G.phase === 'flight') { r.n.push(+document.getElementById('lvn').textContent); if (document.getElementById('live').classList.contains('on')) r.live = true;
+            if (document.getElementById('panel').classList.contains('away')) r.away = true; if (document.getElementById('combo').classList.contains('on')) r.combo = true;
+            if (A.trailCol(5, 10).startsWith('hsla')) r.rainbow = true; }
+          if (G.phase === 'rest' && G.restT > 0.5) { const p = document.getElementById('panel'); r.rest = { cls: p.className, clubs: getComputedStyle(document.getElementById('clubs')).opacity, sw: getComputedStyle(document.getElementById('sw')).opacity };
+            r.liveOff = !document.getElementById('live').classList.contains('on'); r.nice = G.nice; r.pop = Math.round(document.getElementById('pop').getBoundingClientRect().height); return done(r); }
+          requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      }));
+      const rising = fl.n.every((v, i) => i === 0 || v >= fl.n[i - 1]);
+      ok(fl.live && rising && fl.n[fl.n.length - 1] > 60 && fl.liveOff, `飛んでいる間、距離が数えあがり (${fl.n[0]}→${fl.n[fl.n.length - 1]}y)、止まると消える`);
+      ok(!fl.nice || (fl.combo && fl.rainbow), `ナイスが 3 回続くと「れんぞく」の札と虹色の跡が出る (ナイス ${fl.nice}・札 ${fl.combo}・虹 ${fl.rainbow})`);
+      ok(fl.away && fl.rest.clubs === '0' && fl.rest.sw === '1', `打っている間は下の帯とボタンが引っこみ、止まったら「つぎへ」だけ出る (止まったとき クラブ ${fl.rest.clubs}・ボタン ${fl.rest.sw})`);
+      ok(fl.pop <= 150, `点数の札は小さく、玉の落ちた所にかからない (高さ ${fl.pop}pt)`);
+      // (4) カップイン: 旗から 1y 以内で止まると特別の札・数・記録の旗
+      await pg.evaluate(() => document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+      await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
+      const cup = await pg.evaluate(() => { const A = window.__app, G = A.G, t = A.TG[0];
+        Object.assign(G, { mode: 'chal', target: t, left: 10, score: 0, list: [], recs: [], stat: { nice: 0, green: 0, pin: 0, cup: 0 }, nice: true, launched: true,
+          shot: { carry: t.z, miss: false, ae: 0, e: 0 }, ball: { x: t.x + 0.4, y: 0, z: t.z + 0.3 } });
+        A.rest(); return { title: document.getElementById('pt').textContent, cup: G.stat.cup, recs: G.recs.length, pt: G.list[0] }; });
+      ok(cup.title === 'カップイン!!' && cup.cup === 1 && cup.recs === 1 && cup.pt === 100, `カップインで特別の札が出て、数えられ、記録の旗が立つ (${cup.title}・${cup.pt}てん・旗 ${cup.recs})`);
+
       // ねらいうち 10 球: 最後まで打つと結果が出て、ベストを覚え、開き直しても残る
       await pg.reload({ waitUntil: 'load' });
       await pg.evaluate(() => { window.__shoot = undefined; });
@@ -329,6 +370,17 @@ async function run() {
         });
       });
       await pg.locator('#bC').tap();
+      // ねらう旗のグリーンだけはっきり、ほかの丸はうすく (1 コマぶん、輪を描くときの濃さを控える)
+      const rings = await pg.evaluate(() => new Promise((done) => {
+        const c = document.getElementById('c').getContext('2d'), A = window.__app, cols = A.TG.map((t) => t.c), seen = {}, st = c.stroke;
+        c.stroke = function (...a) { const k = String(this.strokeStyle).toLowerCase(); const i = cols.findIndex((x) => x.toLowerCase() === k);
+          if (i >= 0) seen[i] = Math.max(seen[i] || 0, this.globalAlpha); return st.apply(this, a); };
+        requestAnimationFrame(() => requestAnimationFrame(() => { c.stroke = st; done({ seen, on: A.TG.indexOf(A.G.target), white: cols.findIndex((x) => x.toLowerCase() === '#ffffff') }); }));
+      }));
+      // 白い旗の輪は、ねらいの印 (白い輪) と色が同じで見分けられないので数えない
+      const others = Object.entries(rings.seen).filter(([i]) => +i !== rings.on && rings.white !== +i).map(([, a]) => a);
+      ok(rings.seen[rings.on] === 1 && others.length > 0 && others.every((a) => a <= 0.2),
+        `ねらう旗の丸だけはっきり、ほかの丸はうすい (ねらう丸の濃さ ${rings.seen[rings.on]}・ほか ${others.map((a) => a.toFixed(2)).join('/')})`);
       let shots = 0;
       for (let i = 0; i < 10; i++) {
         const z = await pg.evaluate(() => window.__app.G.target.z);
@@ -340,9 +392,10 @@ async function run() {
       await pg.waitForFunction(() => !document.getElementById('over').hidden, null, { timeout: 5000 }).catch(() => {});
       await pg.waitForTimeout(4200);
       const res = await pg.evaluate(() => ({ over: !document.getElementById('over').hidden, score: window.__app.G.score, shown: document.getElementById('rs').textContent,
-        n: document.querySelectorAll('#rl div').length, best: window.__app.save.best }));
+        n: document.querySelectorAll('#rl div').length, best: window.__app.save.best, rank: document.getElementById('rr').textContent, last: window.__app.save.last }));
       ok(shots === 10 && res.over && res.n === 10, `ねらいうち 10 球を打ち切ると結果が出る (${shots} 球・${res.n} 個の記録)`);
       ok(String(res.score) === res.shown && res.best === res.score && res.score > 0, `合計 ${res.score} てんが出て、ベストに残る`);
+      ok(/^[SABCD] ランク$/.test(res.rank) && res.last === res.score, `ランクが出て (${res.rank})、次に比べるため今回の点を覚える (${res.last})`);
       await pg.reload({ waitUntil: 'load' });
       const kept = await pg.evaluate(() => document.getElementById('best').textContent);
       ok(kept.includes(String(res.score)), `開き直してもベストが残る (${kept})`);
