@@ -140,8 +140,10 @@
   function powerFor(dist) { return Math.max(0, Math.min(1, (Math.sqrt(2 * P.MU * dist) - P.VMIN) / (P.VMAX - P.VMIN))); }   // 平らなら dist だけ転がる強さ
   // 画面の上の向き (dx, dy) を、玉から見た地面の向き (ラジアン) にする
   function aimFromPull(dx, dy) {
-    const L = Math.hypot(dx, dy), bp = scr(S.ball.x, S.ball.z), g = ground(bp.x + dx / L * 90, bp.y + dy / L * 90), ca = cupAngle();
-    let a = Math.atan2(g.x - S.ball.x, g.z - S.ball.z); if (g.z <= S.ball.z) a = dx >= 0 ? ca + AIMMAX : ca - AIMMAX;
+    // 玉から少しだけ (24pt) 進んだ画面の点を地面に戻して向きにする。手前 (カメラの方) へも打てる
+    // (前は「地面で手前へ向いたら横へ逃がす」にしていて、ピンより奥に行った玉を手前のカップへ打ち返せなかった)
+    const L = Math.hypot(dx, dy), bp = scr(S.ball.x, S.ball.z), g = ground(bp.x + dx / L * 24, bp.y + dy / L * 24), ca = cupAngle();
+    const a = Math.atan2(g.x - S.ball.x, g.z - S.ball.z);
     let d = a - ca; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
     return ca + Math.max(-AIMMAX, Math.min(AIMMAX, d));
   }
@@ -220,12 +222,13 @@
   function aimGuide(b, bp, c) {
     // ひっぱっているあいだ: ねらいの点線 (カップまでの距離ぶん)、平らなら止まる所に輪、玉から伸びる矢印 (長さ = いまの強さ)
     const sx = Math.sin(S.aim), sz = Math.cos(S.aim), D = Math.hypot(c.x - b.x, c.z - b.z) + 0.4, lim = c.z + 3;
+    const zmin = (VW.to ? pic().near.cz : 0) + 0.35;   // 手前へ打つとき、カメラのうしろに回る所は描かない
     for (let d = 0.15; d < D; d += 0.16) {
-      if (b.z + sz * d > lim) break; const p = scr(b.x + sx * d, b.z + sz * d), r = Math.max(1.5, 0.02 * p.s);
+      if (b.z + sz * d > lim || b.z + sz * d < zmin) break; const p = scr(b.x + sx * d, b.z + sz * d), r = Math.max(1.5, 0.02 * p.s);
       ctx.fillStyle = `rgba(255,255,255,${0.8 - 0.5 * d / D})`; ctx.beginPath(); ctx.ellipse(p.x, p.y, r, r * 0.45, 0, 0, 7); ctx.fill();
     }
     const hot = S.pw > 0.85, col = hot ? '#ff6a4d' : '#ffd23f', sp = P.speedOf(S.pw), L = sp * sp / (2 * P.MU);
-    if (b.z + sz * L <= lim) { const e = scr(b.x + sx * L, b.z + sz * L), r = Math.max(5, 0.1 * e.s); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(e.x, e.y, r, r * 0.4, 0, 0, 7); ctx.stroke(); }
+    if (b.z + sz * L <= lim && b.z + sz * L >= zmin) { const e = scr(b.x + sx * L, b.z + sz * L), r = Math.max(5, 0.1 * e.s); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(e.x, e.y, r, r * 0.4, 0, 0, 7); ctx.stroke(); }
     // 矢印は画面の上で太く (指で隠れない玉の前へ)。長さ 30〜150pt
     const t = scr(b.x + sx * 0.5, b.z + sz * 0.5), ux = t.x - bp.x, uy = t.y - bp.y, ul = Math.hypot(ux, uy) || 1, nx = ux / ul, ny = uy / ul;
     const len = 30 + 120 * S.pw, r0 = Math.max(6, 0.03 * bp.s) + 4, x0 = bp.x + nx * r0, y0 = bp.y + ny * r0, x1 = x0 + nx * len, y1 = y0 + ny * len;
