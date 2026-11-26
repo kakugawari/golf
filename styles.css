@@ -6,11 +6,11 @@
    LAYOUT: 全画面キャンバス、上に小さな情報、下にねらい・クラブ・パワー。 */
 :root{color-scheme:light;--g:#2f8f3a;--gd:#1d5e27;--ink:#173a1c;--cream:#fffdf6;--gold:#ffd23f;--glass:rgba(12,20,15,.62);--glass2:rgba(12,20,15,.78);--line:rgba(255,255,255,.18);--on:#1d1503}
 *{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100vh;width:100%;overflow:hidden;background:#7ec8f0;overscroll-behavior:none;position:relative}
+html,body{margin:0;height:100vh;width:100%;overflow:hidden;background:#314831;overscroll-behavior:none;position:relative}
 [hidden]{display:none!important}
 body{font:16px/1.4 "M PLUS Rounded 1c",system-ui,sans-serif;color:var(--ink);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
 /* 練習場の写真 (動かないので CSS の背景に敷く。canvas は動く物だけを描く) */
-#stage{position:absolute;inset:0;background:#7ec8f0 url(range.jpg) center/cover no-repeat}
+#stage{position:absolute;inset:0;background:#314831 url(range.jpg) center/cover no-repeat}
 /* 写真をもう 1 枚重ね、打った瞬間はこちらをゆらして寄せる (下の #stage の写真がすき間を埋める) */
 #bg{position:absolute;inset:0;background:url(range.jpg) center/cover no-repeat;will-change:transform;transform-origin:0 0}
 #c{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -29,10 +29,10 @@ body{font:16px/1.4 "M PLUS Rounded 1c",system-ui,sans-serif;color:var(--ink);use
 .aimt .dot{width:11px;height:11px;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.85)}
 .panel{position:absolute;left:0;right:0;bottom:0;padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);pointer-events:none}
 .panel>*{pointer-events:auto}
-.clubs{display:flex;margin:0 auto 10px;padding:3px;gap:3px;background:var(--glass2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:14px;transition:opacity .2s}
-.club{flex:1;border:0;border-radius:11px;padding:4px 4px 5px;min-height:44px;background:transparent;color:#fff;font:inherit;font-weight:800;font-size:15px;line-height:1.15;cursor:pointer}
+.clubs{display:flex;width:max-content;margin:0 auto 8px;padding:2px;gap:2px;background:var(--glass2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:999px;transition:opacity .2s}
+.club{flex:none;border:0;border-radius:999px;padding:0 16px;min-height:34px;background:transparent;color:rgba(255,255,255,.75);font:inherit;font-weight:800;font-size:14px;line-height:1;cursor:pointer}
 .club small{display:block;font-weight:500;font-size:11px;color:rgba(255,255,255,.65)}
-.club.on{background:var(--gold);color:var(--on)}
+.club.on{background:rgba(255,210,63,.18);color:var(--gold);box-shadow:inset 0 0 0 1.5px var(--gold)}
 .club.on small{color:rgba(29,21,3,.7)}
 .ctrl{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 6px}
 .ab{width:60px;height:60px;flex:none;border:1px solid var(--line);border-radius:50%;background:var(--glass2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font:inherit;font-weight:800;font-size:22px;cursor:pointer;transition:opacity .2s,transform .06s}
