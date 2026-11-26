@@ -131,7 +131,7 @@ body{font:16px/1.4 "M PLUS Rounded 1c",system-ui,sans-serif;color:var(--ink);use
 .stamp.rC,.stamp.rD{border-color:#5d7385;color:#5d7385}
 /* パターゴルフ (9 ホール)。背景の絵の大きさと位置は putt.js が px で決める */
 #putt{position:absolute;inset:0;background:#7cc47a no-repeat;touch-action:none;z-index:5}
-#pbg{position:absolute;inset:0;background-repeat:no-repeat;transform-origin:0 0;will-change:transform}
+#pbg,#pbg2{position:absolute;inset:0;background-repeat:no-repeat;transform-origin:0 0;will-change:transform}
 #pc{position:absolute;inset:0;width:100%;height:100%;display:block}
 .pslope svg{width:20px;height:20px;transition:transform .3s}
 .pquit{position:absolute;right:12px;top:calc(env(safe-area-inset-top) + 62px);border:1px solid var(--line);background:var(--glass);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font:inherit;font-weight:800;font-size:13px;border-radius:10px;padding:6px 12px}
@@ -143,11 +143,10 @@ body{font:16px/1.4 "M PLUS Rounded 1c",system-ui,sans-serif;color:var(--ink);use
 .pcards div.o{background:rgba(255,106,77,.22)}
 .pcards small{display:block;font-size:10px;color:rgba(255,255,255,.55)}
 /* パター: 棒のゲージ (右はし) と「うつ」のボタン */
-.pgauge{position:absolute;right:16px;bottom:calc(env(safe-area-inset-bottom) + 150px);width:44px;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
+.pgauge{position:absolute;right:16px;bottom:calc(env(safe-area-inset-bottom) + 70px);width:44px;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
 .pgauge small{color:#fff;font-weight:800;font-size:12px;text-shadow:0 1px 3px rgba(0,0,0,.7)}
 .pgbar{position:relative;width:30px;height:260px;border-radius:15px;background:var(--glass2);border:2px solid rgba(255,255,255,.55);overflow:visible;box-shadow:0 6px 16px rgba(0,0,0,.35)}
 .pgfill{position:absolute;left:3px;right:3px;bottom:3px;height:calc(100% - 6px);border-radius:12px;background:linear-gradient(to top,#7be36b,#ffd23f 70%,#ff6a4d);clip-path:inset(100% 0 0 0)}
 .pgmark{position:absolute;left:-8px;right:-8px;height:0;border-top:3px solid #fff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 .pgmark span{position:absolute;right:calc(100% + 4px);top:-10px;font-size:11px;font-weight:800;color:#fff;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.8)}
-.pshot{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 52px);margin-left:-56px}
 @media (prefers-reduced-motion:reduce){.sw.idle{animation:none}.pop.on{transition:none}.pill.bump{animation:none}}
