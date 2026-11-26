@@ -17,7 +17,7 @@
   const store = () => { try { localStorage.setItem(SAVEK, JSON.stringify(save)); } catch (e) {} };
 
   let W = 0, H = 0, DPR = 1;
-  const AIMHINT = '左右になぞって ねらう → 「うつ」で ゲージ';
+  const AIMHINT = 'どこからでも うしろへ ひっぱって ねらう';
   const S = { on: false, hole: 0, strokes: 0, cards: [], state: 'aim', ball: null, v: { x: 0, z: 0 }, prev: null, lipped: false, sunk: false, drag: null, sinkT: 0, msg: '', msgT: 0, t: 0, parts: [] };
   const hole = () => P.HOLES[S.hole], pic = () => P.PICS[hole().pic];
   function fit() { const k = Math.max(W / pic().w, H / pic().h); return { k, ox: (W - pic().w * k) / 2, oy: (H - pic().h * k) / 2 }; }
@@ -114,39 +114,50 @@
     for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, r = 120 + Math.random() * 380; S.parts.push({ x: p.x, y: p.y - 60, vx: Math.cos(a) * r * 0.6, vy: -Math.abs(Math.sin(a)) * r - 80, c: cols[i % cols.length], life: 1.6 + Math.random(), rot: Math.random() * 6 }); }
   }
 
-  // ---------- 入力: 左右になぞって ねらい、「うつ」で棒のゲージを動かし、いい所でタップして止める ----------
-  // (前は「うしろへ引いて はなす」だったが、「引いているときに何も出ないので分かりにくい」と言われた)
-  const AIMMAX = 0.7;   // カップの向きから左右にこれだけ (ラジアン) までねらえる
+  // ---------- 入力: どこからでも うしろへ ひっぱって向きを決め、ゲージがいい所で はなす ----------
+  // ひっぱっているあいだ、玉から向きの矢印と点線が出て、棒のゲージが 0→1→0 を行き来する。はなした瞬間の強さで打つ。
+  // ほとんど引かずに はなすと、打たずに やめる。
+  // (前は「なぞってねらう + うつボタン + タップで止める」で「あまり面白くない」と言われ、その前は「引いても何も出ない」と言われた)
+  const AIMMAX = 1.0, PULLMIN = 24, PERIOD = 1.6;
   function cupAngle() { const c = P.cupOf(pic()); return Math.atan2(c.x - S.ball.x, c.z - S.ball.z); }
   function powerFor(dist) { return Math.max(0, Math.min(1, (Math.sqrt(2 * P.MU * dist) - P.VMIN) / (P.VMAX - P.VMIN))); }   // 平らなら dist だけ転がる強さ
-  function startGauge() { if (S.state !== 'aim') return; S.state = 'power'; S.pt = 0; S.pw = 0; hint('いいところで タップ!'); hudBtn(); snd.tick(); }
-  function stopGauge() { if (S.state !== 'power') return; shoot(S.aim, Math.max(0.02, S.pw)); }
-  function hudBtn() { const b = $('pshot'); b.querySelector('b').textContent = S.state === 'power' ? 'とめる!' : 'うつ'; b.querySelector('small').textContent = S.state === 'power' ? 'どこでもタップ' : 'ゲージ'; b.classList.toggle('now', S.state === 'power'); b.hidden = !(S.state === 'aim' || S.state === 'power'); $('pgauge').hidden = !(S.state === 'aim' || S.state === 'power'); }
+  // 画面の上の向き (dx, dy) を、玉から見た地面の向き (ラジアン) にする
+  function aimFromPull(dx, dy) {
+    const L = Math.hypot(dx, dy), bp = scr(S.ball.x, S.ball.z), g = ground(bp.x + dx / L * 90, bp.y + dy / L * 90), ca = cupAngle();
+    let a = Math.atan2(g.x - S.ball.x, g.z - S.ball.z); if (g.z <= S.ball.z) a = dx >= 0 ? ca + AIMMAX : ca - AIMMAX;
+    let d = a - ca; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+    return ca + Math.max(-AIMMAX, Math.min(AIMMAX, d));
+  }
+  function hudBtn() { $('pgauge').hidden = !(S.state === 'aim' || S.state === 'power'); }
   root.addEventListener('pointerdown', (e) => {
     if (!S.on || e.target.closest('button,#pover')) return;
     e.preventDefault();
     if (S.state === 'card') { next(); return; }
-    if (S.state === 'power') { stopGauge(); return; }   // ゲージが動いているあいだは、どこをタップしても止まる
     if (S.state !== 'aim') return;
-    S.drag = { x: e.clientX, id: e.pointerId, aim: S.aim };
+    S.drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
     try { root.setPointerCapture(e.pointerId); } catch (err) {}
   });
   root.addEventListener('pointermove', (e) => {
-    const d = S.drag; if (!d || e.pointerId !== d.id || S.state !== 'aim') return;
-    const ca = cupAngle(), a = Math.max(ca - AIMMAX, Math.min(ca + AIMMAX, d.aim + (e.clientX - d.x) * 0.0022));
-    if (Math.round(a * 100) !== Math.round(S.aim * 100)) snd.tick(); S.aim = a;
+    const d = S.drag; if (!d || e.pointerId !== d.id) return;
+    const dx = d.x - e.clientX, dy = d.y - e.clientY, L = Math.hypot(dx, dy);
+    if (L < PULLMIN) { if (S.state === 'power') { S.state = 'aim'; hint('ひっぱるのを やめると うたない'); } return; }
+    if (S.state === 'aim') { S.state = 'power'; S.pt = 0; S.pw = 0; snd.tick(); hint('ゲージが いいところで はなす!'); }
+    const a = aimFromPull(dx, dy); if (Math.round(a * 60) !== Math.round(S.aim * 60)) snd.tick(); S.aim = a;
   });
-  const endDrag = (e) => { if (S.drag && e.pointerId === S.drag.id) S.drag = null; };
+  const endDrag = (e) => {
+    if (!S.drag || e.pointerId !== S.drag.id) return; S.drag = null;
+    if (S.state === 'power') { if (e.type === 'pointercancel') { S.state = 'aim'; hint(AIMHINT); } else shoot(S.aim, Math.max(0.02, S.pw)); }
+    else if (S.state === 'aim') hint(AIMHINT);
+  };
   root.addEventListener('pointerup', endDrag); root.addEventListener('pointercancel', endDrag);
-  $('pshot').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (S.state === 'aim') startGauge(); else stopGauge(); });
   $('pquit').onclick = quit; $('bP').onclick = start; $('pagain').onclick = start; $('ptitle').onclick = quit;
 
   // ---------- 動き ----------
   function update(dt) {
     S.t += dt; if (S.msgT > 0) S.msgT -= dt;
     if (S.state === 'power') {
-      // ゲージは 0 → 1 → 0 を 1.6 秒で行き来する (止める瞬間をねらう)
-      S.pt += dt; const ph = (S.pt / 1.6) % 1; S.pw = ph < 0.5 ? ph * 2 : 2 - ph * 2;
+      // ゲージは 0 → 1 → 0 を 1.6 秒で行き来する (はなす瞬間をねらう)
+      S.pt += dt; const ph = (S.pt / PERIOD) % 1; S.pw = ph < 0.5 ? ph * 2 : 2 - ph * 2;
     }
     gaugeUI();
     if ((S.state === 'aim' || S.state === 'power') && !S.drag) { const t = camTarget(); CAM.z += (t - CAM.z) * Math.min(1, dt * 2.2); if (Math.abs(t - CAM.z) < 0.002) CAM.z = t; }
@@ -188,16 +199,22 @@
     ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(tx, x + w / 2, y + 12);
   }
   function aimGuide(b, bp, c) {
-    // ねらいの線: カップまでの距離ぶん、ねらった向きへ点線。ゲージが動いているあいだは、平らなら止まる所に金色の輪
+    // ひっぱっているあいだ: ねらいの点線 (カップまでの距離ぶん)、平らなら止まる所に輪、玉から伸びる矢印 (長さ = いまの強さ)
     const sx = Math.sin(S.aim), sz = Math.cos(S.aim), D = Math.hypot(c.x - b.x, c.z - b.z) + 0.4, lim = c.z + 3;
     for (let d = 0.15; d < D; d += 0.16) {
-      if (b.z + sz * d > lim) break; const p = scr(b.x + sx * d, b.z + sz * d), r = Math.max(1.5, 0.022 * p.s);
-      ctx.fillStyle = `rgba(255,255,255,${0.95 - 0.55 * d / D})`; ctx.beginPath(); ctx.ellipse(p.x, p.y, r, r * 0.45, 0, 0, 7); ctx.fill();
+      if (b.z + sz * d > lim) break; const p = scr(b.x + sx * d, b.z + sz * d), r = Math.max(1.5, 0.02 * p.s);
+      ctx.fillStyle = `rgba(255,255,255,${0.8 - 0.5 * d / D})`; ctx.beginPath(); ctx.ellipse(p.x, p.y, r, r * 0.45, 0, 0, 7); ctx.fill();
     }
-    if (S.state === 'power') {
-      const sp = P.speedOf(S.pw), L = sp * sp / (2 * P.MU);
-      if (b.z + sz * L <= lim) { const e = scr(b.x + sx * L, b.z + sz * L), r = Math.max(5, 0.1 * e.s); ctx.strokeStyle = S.pw > 0.85 ? '#ff6a4d' : '#ffd23f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(e.x, e.y, r, r * 0.4, 0, 0, 7); ctx.stroke(); }
-    }
+    const hot = S.pw > 0.85, col = hot ? '#ff6a4d' : '#ffd23f', sp = P.speedOf(S.pw), L = sp * sp / (2 * P.MU);
+    if (b.z + sz * L <= lim) { const e = scr(b.x + sx * L, b.z + sz * L), r = Math.max(5, 0.1 * e.s); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(e.x, e.y, r, r * 0.4, 0, 0, 7); ctx.stroke(); }
+    // 矢印は画面の上で太く (指で隠れない玉の前へ)。長さ 30〜150pt
+    const t = scr(b.x + sx * 0.5, b.z + sz * 0.5), ux = t.x - bp.x, uy = t.y - bp.y, ul = Math.hypot(ux, uy) || 1, nx = ux / ul, ny = uy / ul;
+    const len = 30 + 120 * S.pw, r0 = Math.max(6, 0.03 * bp.s) + 4, x0 = bp.x + nx * r0, y0 = bp.y + ny * r0, x1 = x0 + nx * len, y1 = y0 + ny * len;
+    ctx.save(); ctx.lineCap = 'round'; ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 6;
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 13; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x1 + nx * 18, y1 + ny * 18); ctx.lineTo(x1 - ny * 13, y1 + nx * 13); ctx.lineTo(x1 + ny * 13, y1 - nx * 13); ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
   function drawBall(bp) {
     // カップに入ると小さくなって消える
@@ -212,7 +229,7 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
     const c = P.cupOf(pic()), cp = scr(c.x, c.z), b = S.ball, bp = scr(b.x, b.z);
     if (S.state === 'aim' || S.state === 'power' || S.state === 'roll') { slopeMarks(b, c); distTag(b, c, cp); }
-    if (S.state === 'aim' || S.state === 'power') aimGuide(b, bp, c);
+    if (S.state === 'power') aimGuide(b, bp, c);
     drawBall(bp);
     for (const q of S.parts) { ctx.globalAlpha = Math.min(1, q.life / 0.5); ctx.fillStyle = q.c; ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.fillRect(-5, -2.5, 10, 5); ctx.restore(); }
     ctx.globalAlpha = 1;
@@ -225,5 +242,5 @@
   function loop(now) { if (!S.on) return; requestAnimationFrame(loop); const dt = Math.min(0.05, Math.max(0, (now - T0) / 1000)); T0 = now; if (document.hidden) return; update(dt); draw(); }
 
   // テストから中身をのぞく入口
-  window.__putt = { S, CAM, camTarget, start, setHole, shoot, scr, ground, cupAngle, powerFor, startGauge, stopGauge, next, finish, get save() { return save; } };
+  window.__putt = { S, CAM, camTarget, start, setHole, shoot, scr, ground, cupAngle, powerFor, aimFromPull, PERIOD, next, finish, get save() { return save; } };
 })();

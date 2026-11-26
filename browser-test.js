@@ -422,28 +422,36 @@ async function run() {
         return Math.max(Math.hypot(q.x - s.x, q.y - s.y), Math.hypot(qb.x - sb.x, qb.y - sb.y)); });
       const al = await alAt();
       ok(al < 0.5, `絵のカップと、計算のカップの位置がそろう (ずれ ${al.toFixed(2)}pt)`);
-      // ねらいの線とゲージは、打つ前から見えている (前は「引いているときに何も出ない」と言われた)
-      const g0 = await pg.evaluate(() => ({ st: window.__putt.S.state, g: !document.getElementById('pgauge').hidden, b: !document.getElementById('pshot').hidden, a: window.__putt.S.aim, ca: window.__putt.cupAngle() }));
-      ok(g0.st === 'aim' && g0.g && g0.b && Math.abs(g0.a - g0.ca) < 1e-6, `打つ前から ゲージと「うつ」が出て、ねらいはカップの向き`);
-      // 左右になぞると ねらいが変わる
-      await pg.mouse.move(200, 400); await pg.mouse.down();
-      for (let i = 1; i <= 6; i++) { await pg.mouse.move(200 + i * 10, 400); await pg.waitForTimeout(16); }
-      await pg.mouse.up();
-      const a1 = await pg.evaluate(() => window.__putt.S.aim);
-      ok(a1 > g0.a + 0.05 && (await pg.evaluate(() => window.__putt.S.state)) === 'aim', `右へなぞると ねらいが右へ (${g0.a.toFixed(3)} → ${a1.toFixed(3)})、まだ打たない`);
-      await pg.evaluate(() => { const U = window.__putt; U.S.aim = U.cupAngle(); });
-      // 「うつ」でゲージが動きだし、もう一度タップで止めて打つ
-      await pg.tap('#pshot');
+      // ひっぱって向きを決め、はなした瞬間のゲージの強さで打つ (モンスト風)
+      const bp = await pg.evaluate(() => { const U = window.__putt; return U.scr(U.S.ball.x, U.S.ball.z); });
+      ok((await pg.evaluate(() => !document.getElementById('pgauge').hidden && !document.getElementById('pshot'))), '打つ前から ゲージが出ている (「うつ」のボタンは無い)');
+      // 少しだけ引いて はなすと、打たない
+      await pg.mouse.move(215, 500); await pg.mouse.down(); await pg.mouse.move(215, 510); await pg.mouse.up(); await pg.waitForTimeout(100);
+      ok((await pg.evaluate(() => window.__putt.S.state + window.__putt.S.strokes)) === 'aim0', 'ほとんど引かずに はなすと 打たない');
+      // 右下へ引くと、左前をねらう (ひっぱった向きの反対)
+      await pg.mouse.move(215, 500); await pg.mouse.down();
+      for (let i = 1; i <= 6; i++) { await pg.mouse.move(215 + i * 12, 500 + i * 20); await pg.waitForTimeout(16); }
+      const pull = await pg.evaluate(() => ({ st: window.__putt.S.state, a: window.__putt.S.aim, ca: window.__putt.cupAngle() }));
+      ok(pull.st === 'power' && pull.a < pull.ca - 0.1, `右下へ引くと 左前をねらう (カップの向き ${pull.ca.toFixed(2)} → ${pull.a.toFixed(2)})`);
+      // まっすぐ下へ引き直すと、カップの向き
+      for (let i = 1; i <= 6; i++) { await pg.mouse.move(215 + (6 - i) * 12, 620); await pg.waitForTimeout(16); }
       const pws = []; for (let i = 0; i < 6; i++) { await pg.waitForTimeout(90); pws.push(await pg.evaluate(() => window.__putt.S.pw)); }
+      const a2 = await pg.evaluate(() => window.__putt.S.aim - window.__putt.cupAngle());
       const fillH = await pg.evaluate(() => { const e = document.getElementById('pgfill'), m = /inset\(([\d.]+)%/.exec(e.style.clipPath); return m ? e.getBoundingClientRect().height * (1 - m[1] / 100) : 0; });
-      ok((await pg.evaluate(() => window.__putt.S.state)) === 'power' && Math.max(...pws) - Math.min(...pws) > 0.15 && fillH > 5, `「うつ」でゲージが動きだす (強さ ${pws.map((v) => v.toFixed(2)).join(' ')}・棒の高さ ${fillH.toFixed(0)}pt)`);
+      ok(Math.abs(a2) < 0.12 && Math.max(...pws) - Math.min(...pws) > 0.15 && fillH > 5, `まっすぐ下へ引くとカップの向き (ずれ ${a2.toFixed(3)})。引いているあいだゲージが動く (${pws.map((v) => v.toFixed(2)).join(' ')}・棒 ${fillH.toFixed(0)}pt)`);
+      // 矢印が玉の前 (画面の上の方) に描かれている: 玉の少し上の画素が金色/赤
+      const arrow = await pg.evaluate((bp) => { const c = document.getElementById('pc'), x = c.getContext('2d'), k = c.width / c.clientWidth; let n = 0;
+        for (let y = bp.y - 60; y < bp.y - 15; y += 2) for (let dx = -6; dx <= 6; dx += 2) { const d = x.getImageData(Math.round((bp.x + dx) * k), Math.round(y * k), 1, 1).data; if (d[0] > 200 && d[1] > 80 && d[2] < 110) n++; } return n; }, bp);
+      ok(arrow > 10, `ひっぱっているあいだ、玉から前へ矢印が出る (金色の画素 ${arrow})`);
+      const want = await pg.evaluate(() => window.__putt.S.pw);
       const z0 = await pg.evaluate(() => window.__putt.S.ball.z);
-      await pg.mouse.click(200, 400);
-      await pg.waitForFunction(() => window.__putt.S.state !== 'power', null, { timeout: 3000 });
-      const hid = await pg.evaluate(() => document.getElementById('pshot').hidden && document.getElementById('pgauge').hidden);
+      await pg.mouse.up();
+      const shot = await pg.evaluate(() => ({ st: window.__putt.S.state, sp: Math.hypot(window.__putt.S.v.x, window.__putt.S.v.z) }));
+      const exp = await pg.evaluate((w) => window.PUTT.speedOf(w), want);
+      ok(shot.st === 'roll' && Math.abs(shot.sp - exp) < 0.35, `はなした瞬間の強さで打つ (速さ ${shot.sp.toFixed(2)}・はなす直前のゲージなら ${exp.toFixed(2)})`);
       await pg.waitForFunction(() => window.__putt.S.state !== 'roll' && window.__putt.S.strokes > 0, null, { timeout: 10000 });
       const st1 = await pg.evaluate(() => ({ z: window.__putt.S.ball.z, n: window.__putt.S.strokes, st: window.__putt.S.state }));
-      ok(st1.n === 1 && st1.z > z0 + 0.1 && hid, `どこかをタップでゲージが止まり、前へ転がって 1 打 (${z0.toFixed(2)} → ${st1.z.toFixed(2)}m・${st1.st})。転がる間はボタンを隠す`);
+      ok(st1.n === 1 && st1.z > z0 + 0.05, `前へ転がって 1 打 (${z0.toFixed(2)} → ${st1.z.toFixed(2)}m・${st1.st})`);
       // 目安の線: 平らなホール 1 で、目安の強さで打つとカップの近くに止まる
       const mk = await pg.evaluate(() => { const U = window.__putt, P = window.PUTT; U.setHole(0); const c = P.cupOf(P.PICS[0]); const d = Math.hypot(c.x - U.S.ball.x, c.z - U.S.ball.z); const r = P.simulate(P.HOLES[0], U.S.ball, U.cupAngle(), U.powerFor(d)); return { r: r.r, e: Math.hypot(r.ball.x - c.x, r.ball.z - c.z) }; });
       ok(mk.r === 'in' || mk.e < 0.15, `ゲージの「カップ」の目安で打つと、平らならカップに届く (${mk.r}・ずれ ${mk.e.toFixed(2)}m)`);
