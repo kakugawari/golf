@@ -9,6 +9,8 @@ addEventListener('resize',resize);resize();
 function placePhoto(){if(!(W>=1&&H>=1))return;const k=Math.max(W/704,H/1520),w=704*k,h=1520*k,x=(W-w)/2,y=(H-h)/2;
  for(const el of [document.getElementById('stage'),document.getElementById('bg')]){el.style.backgroundSize=`${w}px ${h}px`;el.style.backgroundPosition=`${x}px ${y}px`;}}
 addEventListener('resize',placePhoto);placePhoto();
+// ホーム画面から開くと、はじめに測った大きさのあとで画面の高さが変わることがある (実機で写真が 914pt までしか届かず、下に水色の帯が出た)。入れ物の大きさが変わったら測り直す
+if(window.ResizeObserver)new ResizeObserver(()=>{resize();placePhoto();}).observe(document.getElementById('stage'));
 
 const CLUBS=[
  {id:'dr',k:'1W',name:'ドライバー',carry:230,apex:30,roll:24},
@@ -56,7 +58,7 @@ const sfx={
 function buzz(ms){try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}}
 
 /* ---------- UI ---------- */
-function buildClubs(){$('clubs').innerHTML=CLUBS.map((c,i)=>`<button class="club${i===G.club?' on':''}" data-i="${i}">${c.k} ${c.name}<small>さいだい ${c.carry}y</small></button>`).join('');buildTicks();}
+function buildClubs(){$('clubs').innerHTML=CLUBS.map((c,i)=>`<button class="club${i===G.club?' on':''}" data-i="${i}" aria-label="${c.name} さいだい ${c.carry}y">${c.k}</button>`).join('');buildTicks();}
 function pt(a,r){const t=a*Math.PI/180;return [100+Math.cos(t)*r,100+Math.sin(t)*r];}
 function arcD(a0,a1,r){if(Math.abs(a1-a0)<0.5)a1=a0+0.5;const lo=Math.min(a0,a1),hi=Math.max(a0,a1);const p0=pt(lo,r),p1=pt(hi,r);return `M${p0[0].toFixed(1)} ${p0[1].toFixed(1)} A${r} ${r} 0 ${hi-lo>180?1:0} 1 ${p1[0].toFixed(1)} ${p1[1].toFixed(1)}`;}
 function angOf(p){return 90+p*ARC;}
@@ -73,7 +75,7 @@ const _c=new Map();function setA(el,k,v){const key=el.id+'|'+k;if(_c.get(key)===
 function setCls(el,c,on){if(el.classList.contains(c)!==on)el.classList.toggle(c,on);}
 function setGauge(){const ph=G.phase,c=CLUBS[G.club];let v=0,a=90;
  if(ph==='power'){v=G.p;a=angOf(v);}else if(ph==='ring'){v=G.power;a=90+(angOf(v)-90)*(G.ring-G.r0)/(RING0-G.r0);}
- else if(['swing','flight','roll','rest'].includes(ph)){v=G.power;a=70;}
+ else if(['swing','flight','roll','rest'].includes(ph)){v=G.power;a=G.hitA??90;}   // 押した所で止めておく (前は 70° のはしへ寄せていて「止めた所で止まっていてほしい」と言われた)
  const fill=$('afill');if(v>0){setA(fill,'d',arcD(90,angOf(v),AR));setA(fill,'stroke','#ffd23f');setA(fill,'opacity',String(ph==='power'?1:ph==='ring'?0.35:0.55));}else setA(fill,'d','');
  const z=$('azone');if(ph==='ring'){const w=(angOf(G.power)-90)*RWIN*0.25/(RING0-G.r0);setA(z,'d',arcD(90-w,90+w,AR));setA(z,'stroke',Math.abs(G.ring-G.r0)<=RWIN*0.25?'#fff':'#ffd23f');}else setA(z,'d','');
  const q=pt(a,AR);setA($('amk'),'transform',`translate(${q[0].toFixed(1)} ${q[1].toFixed(1)})`);
@@ -124,16 +126,17 @@ function nextBall(){unpop();G.shown=G.score;G.phase='ready';G.launched=false;G.s
   const need=G.target.z;G.club=need>155?0:need>100?1:2;G.aim=Math.round(G.target.x/G.target.z*100)/100;}else{G.target=null;G.wind={x:0,z:0};G.aim=0;}
  buildClubs();hud();aimLab();setGauge();}
 function down(){
- if(G.phase==='ready'){ac();G.phase='power';G.p=0;G.ph=[];G.dir=1;hud();hint('ちょうどいい距離で はなす');}
+ if(G.phase==='ready'){ac();G.phase='power';G.p=0;G.ph=[];G.dir=1;G.bsT=0;hud();hint('ちょうどいい距離で はなす');}
  else if(G.phase==='ring'){hit();}
  else if(G.phase==='rest'&&G.restT>0.5){after();}}
 function up(){if(G.phase==='power'){const h=G.ph||[],t=performance.now()-80;let pv=G.p;for(let i=h.length-1;i>=0;i--){if(h[i][0]<=t){pv=h[i][1];break;}}G.power=Math.max(0.05,pv);G.p=G.power;G.phase='ring';G.ring=RING0;sfx.tick();hint('白い玉が 下の▲にきたら タップ!');}}
-function hit(){const e=Math.max(-1,Math.min(1,(G.ring-G.r0)/RWIN));G.e=e;G.phase='swing';G.swT=0;G.aS=ang;G.launched=false;sfx.whoosh();hint('');}
+function hit(){const e=Math.max(-1,Math.min(1,(G.ring-G.r0)/RWIN));G.e=e;G.tms=Math.round((G.ring-G.r0)/RSPD*1000);G.hitA=90+(angOf(G.power)-90)*(G.ring-G.r0)/(RING0-G.r0);G.phase='swing';G.swT=0;G.aS=ang;G.launched=false;sfx.whoosh();hint('');}
 function launch(){const c=CLUBS[G.club],P=G.power,e=G.e,ae=Math.abs(e),miss=ae>=0.999,nice=ae<0.25;
  const ad=Math.max(0,(ae-0.25)/0.75);let carry=c.carry*P*(1-0.35*Math.pow(ad,1.4));if(miss)carry*=0.45;carry+=G.wind.z*carry/60;carry=Math.max(4,carry);
  const apex=c.apex*(0.45+0.55*P)*(miss?0.3:1);
  const roll=c.roll*(0.4+0.6*P)*(1-0.4*ad)*(miss?1.4:1);
- G.shot={carry,apex,aim:G.aim,roll,T:1.1+carry/85,curve:-e*carry*0.16,st:-e*0.05,wx:G.wind.x*carry/45,miss,ae,e};
+ // 曲がりは「ナイス」の幅 (|e|<0.25、▲から ±0.08 秒) の外に出たぶんだけ。前は -e に比例していたので、ナイスでも少し早く押すと必ず左へ曲がった
+ const sg=Math.sign(e);G.shot={carry,apex,aim:G.aim,roll,T:1.1+carry/85,curve:-sg*ad*carry*0.16,st:-sg*ad*0.05,wx:G.wind.x*carry/45,miss,ae,e};
  G.phase='flight';G.t=0;G.launched=true;G.nice=nice;
  sfx.hit(nice,miss,nice?G.combo:0);   // ナイスが続くほど、キーンの音を少しずつ高く (3)buzz(nice?35:15);
  // 手ごたえ: インパクトの形で一瞬止める → 玉のところに光と輪 → 画面ごと (写真も) ゆらしてぐっと寄る
@@ -144,6 +147,7 @@ function launch(){const c=CLUBS[G.club],P=G.power,e=G.e,ae=Math.abs(e),miss=ae>=
 function Z(s,u){return s.carry*u*(1.25-0.25*u);}
 function X(s,u){const z=Z(s,u);return (s.aim+s.st)*z+s.curve*u*u+s.wx*u;}
 function Y(s,u){return s.apex*Math.sin(Math.PI*Math.pow(u,1.15));}
+function timingText(){const m=G.tms||0;return Math.abs(m)<=83?'タイミング ぴったり':`${(Math.abs(m)/1000).toFixed(2)}秒${m>0?'はやい':'おそい'}`;}   // ▲から何秒ずれたか。曲がった理由が分かるように
 function quality(s){if(s.miss)return 'ミスショット…';if(s.ae<0.25)return G.combo>1?`ナイスショット! ×${G.combo}`:'ナイスショット!';const h=s.e>0;if(s.ae<0.55)return h?'ちょいフック':'ちょいスライス';return h?'フック':'スライス';}
 function landFx(){const b=G.ball;sfx.land();G.shake=Math.max(G.shake,3);burst(b.x,0.1,b.z,16,['#5fb64f','#3d8a35','#8b6b3d','#c8e6a0'],{sp:3,up:5,g:15,life:0.8,size:0.5});}
 function rest(){G.phase='rest';G.restT=0;const s=G.shot,b=G.ball;const tot=Math.round(b.z),car=Math.round(s.carry);
@@ -153,12 +157,12 @@ function rest(){G.phase='rest';G.restT=0;const s=G.shot,b=G.ball;const tot=Math.
   else if(d<=3){lab='ピンそば!!';cls='gold';sfx.pin();confetti(t,90);G.flash=0.5;recFlag(b,'#ffd23f','');}
   else if(d<GR){lab='グリーンオン!';cls='gold';sfx.green();confetti(t,45);}
   const stars=pt>=90?3:pt>=60?2:pt>=30?1:0;
-  pop({title:lab,cls,num:pt,unit:'てん',stars,sub:`ピンまで ${Math.round(d)}y ・ ${tot}y とんだ`,map:mapSvg(b.x-t.x,b.z-t.z),done:()=>{G.shown=G.score;hud();const h=$('hl');h.classList.remove('bump');void h.offsetWidth;h.classList.add('bump');}});
+  pop({title:lab,cls,num:pt,unit:'てん',stars,sub:`ピンまで ${Math.round(d)}y ・ ${timingText()}`,map:mapSvg(b.x-t.x,b.z-t.z),done:()=>{G.shown=G.score;hud();const h=$('hl');h.classList.remove('bump');void h.offsetWidth;h.classList.add('bump');}});
   hud();hint(G.left>0?'':'10球おわり! ボタンで けっか');}
  else{const side=Math.round(b.x);const sd=Math.abs(side)<=3?'まっすぐ':side>0?`右へ ${side}y`:`左へ ${-side}y`;
   const c=CLUBS[G.club];let best=false;if(!s.miss&&tot>(save.far[c.id]||0)){save.far[c.id]=tot;store();best=true;confetti({x:b.x,z:b.z},40);sfx.green();
    G.recs=G.recs.filter(r=>r.k!==c.k);recFlag(b,'#ffd23f',c.k);}   // 記録の旗は クラブごとに 1 本 (前の記録は抜く)
-  pop({title:best?'じこベスト!':quality(s),cls:best?'gold':s.miss?'miss':G.nice?'green':'',num:tot,unit:'y',stars:null,sub:`キャリー ${car}y ・ ${sd}`});hint('');}
+  pop({title:best?'じこベスト!':quality(s),cls:best?'gold':s.miss?'miss':G.nice?'green':'',num:tot,unit:'y',stars:null,sub:`${sd} ・ ${timingText()}`});hint('');}
  G.marks.push({x:b.x,z:b.z});if(G.marks.length>12)G.marks.shift();}
 // 記録の印: 落ちた所に小さな金色の旗を立て、この遊びのあいだ残す (2)
 const CUP=1.0;
@@ -229,7 +233,8 @@ function update(dt){
  if(P==='ready')ang=A0;
  else if(P==='power')ang=A0-G.p*3.0;
  else if(P==='ring')ang=A0-G.power*3.0;
- if(P==='swing'||(G.launched&&G.swT<0.6)){G.swT+=dt;const t1=0.07;
+ if(P==='power'||P==='ring')G.bsT=(G.bsT||0)+dt;
+ if(P==='swing'||(G.launched&&G.swT<0.6)){G.swT+=dt;const t1=DOWN;
   if(G.swT<t1){const k=G.swT/t1;ang=G.aS+(A0-G.aS)*k*k;}else{ang=A0+2.5*ease((G.swT-t1)/0.38);if(!G.launched)launch();}}
  if(G.phase==='flight'){const s=G.shot;G.t+=dt;let u=G.t/s.T;if(u>=1){u=1;G.phase='roll';G.t=0;}
   G.ball={x:X(s,u),y:Y(s,u),z:Z(s,u)};G.trail.push({...G.ball});if(G.trail.length>110)G.trail.shift();if(G.phase==='roll')landFx();}
@@ -303,18 +308,26 @@ const GFR=[{fx:26,fy:444,hx:285,hy:412},{fx:28,fy:429},{fx:55,fy:514},{fx:27,fy:
 GFR.forEach((f,i)=>{f.im=new Image();f.im.src=(window.__IMG&&window.__IMG[i])||`g${i+1}.webp`;});
 const GSC=0.0056;   // 玉の所の 1y あたりの点の数に掛ける。見本 (左下に小さく) に合わせ、写真の人の背丈より小さめ (前は 0.0088)
 // いまのポーズ: ためている間はパワーで 構え→テークバック→真上→トップ、振ると 切り返し→インパクト→振り抜き→フィニッシュ
-function poseIdx(){const ph=G.phase,bk=p=>p<0.2?0:p<0.45?1:p<0.75?2:3;
- if(ph==='power')return bk(G.p);if(ph==='ring')return bk(G.power);
+/* ポーズの出し方 (「動きがぎこちない、リズムが一定で悪い、めりはり」と言われた)。
+   前はテークバックをゲージの強さで決めていて、ゲージが上下するたびに 4 段で行ったり来たりした。振り下ろしは 0.07 秒なのに、インパクトの形は 0.22 秒残っていた。
+   いまは ゆっくり上げる (0.55 秒) → トップで止まる (▲を待つ) → すばやく振り下ろす (0.09 秒) → インパクトはヒットストップの一瞬だけ → 振り抜いてフィニッシュで止まる */
+const BS=[0.1,0.3,0.55],DOWN=0.09;
+function poseIdx(){const ph=G.phase;
+ if(ph==='power'||ph==='ring'){const t=G.bsT||0;return t<BS[0]?0:t<BS[1]?1:t<BS[2]?2:3;}
  if(ph==='swing'&&!G.launched)return 4;
- if(G.launched){const t=G.swT;return t<0.16?5:t<0.28?6:7;}
+ if(G.launched){const t=G.swT-DOWN;return t<0.03?5:t<0.2?6:7;}
  return 0;}
 function golfer(){const b=pr(0,0,0);if(!b)return;const sc=b.s*GSC,A=GFR[0];
  const fx=b.x+(A.fx-A.hx)*sc,fy=b.y+(A.fy-A.hy)*sc;
  // カメラが玉を追って寄ると、手前の打つ人は大きくぼやけて画面に残る。寄るにつれて消す
  const al=Math.max(0,Math.min(1,1-(C.z-CAM0)/0.3));if(al<=0)return;ctx.globalAlpha=al;
  ctx.fillStyle='rgba(0,0,0,.22)';ctx.beginPath();ctx.ellipse(fx+70*sc,fy,110*sc,16*sc,0,0,7);ctx.fill();
- let i=poseIdx();if(!(GFR[i].im.complete&&GFR[i].im.naturalWidth))i=0;const f=GFR[i];
- if(f.im.complete&&f.im.naturalWidth)ctx.drawImage(f.im,fx-f.fx*sc,fy-f.fy*sc,f.im.naturalWidth*sc,f.im.naturalHeight*sc);ctx.globalAlpha=1;}
+ let i=poseIdx();if(!(GFR[i].im.complete&&GFR[i].im.naturalWidth))i=0;
+ // 8 枚の絵を切りかえるだけだと、とぶように見える。変わった直後は前の形をうすく残す (ゆっくりの所は 0.14 秒、振り下ろし〜振り抜きは 0.06 秒の残像)
+ const now=performance.now(),PS=G.pose||(G.pose={cur:i,prev:-1,t:0});if(i!==PS.cur){PS.prev=PS.cur;PS.cur=i;PS.t=now;}
+ const fade=PS.cur>=4&&PS.cur<=6?60:140,k=(now-PS.t)/fade;
+ const put=(j,a)=>{const f=GFR[j];if(!(f.im.complete&&f.im.naturalWidth))return;ctx.globalAlpha=al*a;ctx.drawImage(f.im,fx-f.fx*sc,fy-f.fy*sc,f.im.naturalWidth*sc,f.im.naturalHeight*sc);};
+ if(PS.prev>=0&&k<1)put(PS.prev,0.55*(1-k));put(i,1);ctx.globalAlpha=1;}
 function ball(){const b=G.ball,g=pr(b.x,0,b.z),p=pr(b.x,b.y,b.z);if(!p)return;const r=Math.max(2.2,0.075*p.s);
  if(g){ctx.fillStyle=`rgba(0,0,0,${0.3*Math.max(0.15,1-b.y/40)})`;ctx.beginPath();ctx.ellipse(g.x,g.y,r*1.1,r*0.4,0,0,7);ctx.fill();}
  if(b.z<1&&b.y<0.1&&g){ctx.strokeStyle='#ffe28a';ctx.lineWidth=Math.max(1,0.05*g.s);ctx.beginPath();ctx.moveTo(g.x,g.y);ctx.lineTo(p.x,p.y+r);ctx.stroke();}

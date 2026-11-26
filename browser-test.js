@@ -237,6 +237,51 @@ async function run() {
       const bad = await pg.evaluate(() => window.__shoot(1400, true));
       ok(bad && (bad.z < good.z || Math.abs(bad.x) > Math.abs(good.x) + 3), `遅れて押すと短いか曲がる (${bad && Math.round(bad.z)}y・横に ${bad && Math.round(bad.x)}y)`);
 
+      // 打つ人の動き: テークバックはゲージに合わせて戻らず、トップで止まって待ち、すばやく振り下ろす (前はゲージの上下で行ったり来たりし、トップは 69ms で 2 へ戻っていた)
+      await pg.evaluate(() => document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+      await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
+      const poses = await pg.evaluate(() => new Promise((done) => { const A = window.__app, G = A.G, sw = document.getElementById('sw'); const ev = (t, el) => el.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerId: 1 }));
+        const s = []; const t0 = performance.now(); ev('pointerdown', sw); setTimeout(() => ev('pointerup', window), 1400);
+        const tick = () => { const now = performance.now() - t0, i = A.poseIdx(); if (!s.length || s[s.length - 1].i !== i) s.push({ i, t: now });
+          if (G.phase === 'ring' && G.ring - G.r0 <= 2) ev('pointerdown', sw);
+          if (G.phase === 'flight' && G.t > 1) { s.forEach((x, k) => { x.d = (s[k + 1] ? s[k + 1].t : now) - x.t; }); return done(s); }
+          requestAnimationFrame(tick); }; tick(); }));
+      await pg.waitForFunction(() => window.__app.G.phase === 'rest' && window.__app.G.restT > 0.6, null, { timeout: 15000 });   // 次の球へ進めるよう、止まるまで待つ
+      const order = poses.map((x) => x.i), top = poses.find((x) => x.i === 3), down = poses.find((x) => x.i === 4);
+      ok(order.every((v, k) => k === 0 || v > order[k - 1]) && top && top.t < 800 && top.d > 1000 && down && down.d >= 60 && down.d <= 160,
+        `打つ人は 構え→…→トップで止まって待つ→すばやく振り下ろす の順に、戻らずに進む (${poses.map((x) => `${x.i}:${Math.round(x.d)}ms`).join(' ')})`);
+
+      // ▲より少し早い・少し遅い (ナイスの幅の中) なら曲がらない。前は少しでも早いと必ず左へ曲がった (「基本的に左に曲がる」と言われた)。
+      // 幅の外は、早いと左・遅いと右。押した所でゲージの印が止まったまま (前は 70° のはしへ寄った)。結果に「何秒 はやい/おそい」
+      await pg.evaluate(() => {
+        window.__shootAt = (hold, off) => new Promise((done) => {
+          const G = window.__app.G, sw = document.getElementById('sw'), mk = () => (document.getElementById('amk').getAttribute('transform').match(/-?[\d.]+/g) || []).map(Number);
+          const ev = (t, el) => el.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerId: 1 }));
+          ev('pointerdown', sw);
+          setTimeout(() => {
+            ev('pointerup', window);
+            const t0 = performance.now(); let at = null, far = 0;
+            const tick = () => {
+              if (G.phase === 'ring' && G.ring - G.r0 <= off) { at = mk(); ev('pointerdown', sw); }   // 押す直前の印の位置
+              else if (at && ['swing', 'flight', 'roll', 'rest'].includes(G.phase)) { const q = mk(); far = Math.max(far, Math.hypot(q[0] - at[0], q[1] - at[1])); }
+              if (G.phase === 'rest' && G.restT > 0.7) return done({ x: G.ball.x, z: G.ball.z, aimx: G.aim * G.ball.z, e: G.e, at, moved: far, sub: document.getElementById('ps').textContent });
+              if (performance.now() - t0 > 15000) return done(null);
+              requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          }, hold);
+        });
+      });
+      const nextBall = async () => { await pg.evaluate(() => document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))); await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 }); };
+      const sh = {};
+      for (const [k, off] of [['early', 6], ['late', -5], ['early2', 18], ['late2', -18]]) { await nextBall(); sh[k] = await pg.evaluate((o) => window.__shootAt(1400, o), off); }
+      const side = (r) => r.x - r.aimx;
+      ok(Math.abs(sh.early.e) < 0.25 && Math.abs(sh.late.e) < 0.25 && Math.abs(side(sh.early)) < 0.5 && Math.abs(side(sh.late)) < 0.5,
+        `ナイスの幅の中なら、少し早くても遅くても曲がらない (早い e=${sh.early.e.toFixed(2)} 横 ${side(sh.early).toFixed(1)}y・遅い e=${sh.late.e.toFixed(2)} 横 ${side(sh.late).toFixed(1)}y)`);
+      ok(side(sh.early2) < -3 && side(sh.late2) > 3, `ナイスの幅の外は、早いと左・遅いと右へ曲がる (早い ${side(sh.early2).toFixed(1)}y・遅い ${side(sh.late2).toFixed(1)}y)`);
+      ok(sh.early.at && sh.early.moved < 3 && sh.late2.moved < 3, `押した所でゲージの印が止まったまま、打ったあとも動かない (押す直前からのずれ ${sh.early.moved.toFixed(1)}・${sh.late2.moved.toFixed(1)}px)`);
+      ok(/ぴったり/.test(sh.early.sub) && /秒はやい/.test(sh.early2.sub) && /秒おそい/.test(sh.late2.sub), `結果に、▲から何秒ずれたかが出る (「${(sh.early2.sub.match(/[\d.]+秒\S+/) || [''])[0]}」)`);
+
       await pg.evaluate(() => document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
       await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
       // 写真の置き場所は、的を描く計算と同じ数で px で決める (CSS の cover まかせだと、実機で写真だけずれて的が浮いた)。
