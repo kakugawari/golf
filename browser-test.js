@@ -237,6 +237,20 @@ async function run() {
       const bad = await pg.evaluate(() => window.__shoot(1400, true));
       ok(bad && (bad.z < good.z || Math.abs(bad.x) > Math.abs(good.x) + 3), `遅れて押すと短いか曲がる (${bad && Math.round(bad.z)}y・横に ${bad && Math.round(bad.x)}y)`);
 
+      // 打つ人の動き: テークバックはゲージに合わせて戻らず、トップで止まって待ち、すばやく振り下ろす (前はゲージの上下で行ったり来たりし、トップは 69ms で 2 へ戻っていた)
+      await pg.evaluate(() => document.getElementById('sw').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+      await pg.waitForFunction(() => window.__app.G.phase === 'ready', null, { timeout: 3000 });
+      const poses = await pg.evaluate(() => new Promise((done) => { const A = window.__app, G = A.G, sw = document.getElementById('sw'); const ev = (t, el) => el.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerId: 1 }));
+        const s = []; const t0 = performance.now(); ev('pointerdown', sw); setTimeout(() => ev('pointerup', window), 1400);
+        const tick = () => { const now = performance.now() - t0, i = A.poseIdx(); if (!s.length || s[s.length - 1].i !== i) s.push({ i, t: now });
+          if (G.phase === 'ring' && G.ring - G.r0 <= 2) ev('pointerdown', sw);
+          if (G.phase === 'flight' && G.t > 1) { s.forEach((x, k) => { x.d = (s[k + 1] ? s[k + 1].t : now) - x.t; }); return done(s); }
+          requestAnimationFrame(tick); }; tick(); }));
+      await pg.waitForFunction(() => window.__app.G.phase === 'rest' && window.__app.G.restT > 0.6, null, { timeout: 15000 });   // 次の球へ進めるよう、止まるまで待つ
+      const order = poses.map((x) => x.i), top = poses.find((x) => x.i === 3), down = poses.find((x) => x.i === 4);
+      ok(order.every((v, k) => k === 0 || v > order[k - 1]) && top && top.t < 800 && top.d > 1000 && down && down.d >= 60 && down.d <= 160,
+        `打つ人は 構え→…→トップで止まって待つ→すばやく振り下ろす の順に、戻らずに進む (${poses.map((x) => `${x.i}:${Math.round(x.d)}ms`).join(' ')})`);
+
       // ▲より少し早い・少し遅い (ナイスの幅の中) なら曲がらない。前は少しでも早いと必ず左へ曲がった (「基本的に左に曲がる」と言われた)。
       // 幅の外は、早いと左・遅いと右。押した所でゲージの印が止まったまま (前は 70° のはしへ寄った)。結果に「何秒 はやい/おそい」
       await pg.evaluate(() => {
