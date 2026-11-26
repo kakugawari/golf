@@ -58,3 +58,13 @@ test('呼び名: 1 打はホールインワン、パーとの差で名前が変�
   assert.strictEqual(P.nameOf(3, 2, true), 'ボギー');
   assert.strictEqual(P.nameOf(6, 2, false), 'ギブアップ');
 });
+
+test('近くの絵 (putt1n.jpg) でも、カップが絵の中のカップの所に来て、遠くの絵と同じ所を指す', () => {
+  const pic = P.PICS[0], n = pic.near, c = P.cupOf(pic), q = P.toPic(n, c.x, c.z);
+  assert.ok(Math.abs(q.X - n.cup.X) < 1 && Math.abs(q.Y - n.cup.Y) < 1, `カップ ${q.X.toFixed(1)},${q.Y.toFixed(1)}`);
+  // 近くの絵の上の 1 点 → 世界 → 近くの絵 で戻る
+  const w = P.fromPic(n, 300, 1100), b = P.toPic(n, w.x, w.z);
+  assert.ok(Math.abs(b.X - 300) < 0.01 && Math.abs(b.Y - 1100) < 0.01);
+  // カップの大きさ: 絵のカップの幅 (61px) と、計算の幅がそろう
+  assert.ok(Math.abs(2 * P.CUPR * q.s - 61) < 3, `幅 ${(2 * P.CUPR * q.s).toFixed(1)}px`);
+});

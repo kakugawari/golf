@@ -131,7 +131,7 @@ body{font:16px/1.4 "M PLUS Rounded 1c",system-ui,sans-serif;color:var(--ink);use
 .stamp.rC,.stamp.rD{border-color:#5d7385;color:#5d7385}
 /* パターゴルフ (9 ホール)。背景の絵の大きさと位置は putt.js が px で決める */
 #putt{position:absolute;inset:0;background:#7cc47a no-repeat;touch-action:none;z-index:5}
-#pbg{position:absolute;inset:0;background-repeat:no-repeat;transform-origin:0 0;will-change:transform}
+#pbg,#pbg2{position:absolute;inset:0;background-repeat:no-repeat;transform-origin:0 0;will-change:transform}
 #pc{position:absolute;inset:0;width:100%;height:100%;display:block}
 .pslope svg{width:20px;height:20px;transition:transform .3s}
 .pquit{position:absolute;right:12px;top:calc(env(safe-area-inset-top) + 62px);border:1px solid var(--line);background:var(--glass);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font:inherit;font-weight:800;font-size:13px;border-radius:10px;padding:6px 12px}
