@@ -471,6 +471,21 @@ async function run() {
       const na = await pg.evaluate(() => ({ st: window.__putt.S.state, d: window.__putt.S.aim - window.__putt.cupAngle() }));
       await pg.mouse.move(nb.x, nb.y - 100); await pg.mouse.up();
       ok(na.st === 'power' && Math.abs(na.d) < 0.25, `近くの絵でも、まっすぐ下へひっぱるとカップの向き (ずれ ${na.d.toFixed(3)})`);
+      // ピンより奥に止まった玉も、手前のカップへ打ち返せる (前は手前向きのひっぱりが横へ逃がされていた)。
+      // ピンより奥 (グリーンの奥のはしまで 約 1.9m) は、どこでも近くの絵で見る
+      for (const [ox, oz] of [[0.15, 0.7], [-0.4, 1.5]]) {
+        const back = await pg.evaluate(async ([ox, oz]) => { const U = window.__putt, P = window.PUTT, c = P.cupOf(P.PICS[0]); U.setHole(0); U.S.ball = { x: c.x + ox, z: c.z + oz }; U.S.prev = { ...U.S.ball }; U.S.aim = U.cupAngle();
+          await new Promise((r) => { const t = () => (U.VW.u >= 1 && U.VW.to === 1 ? r() : requestAnimationFrame(t)); t(); }); return { bp: U.scr(U.S.ball.x, U.S.ball.z), ca: U.cupAngle() }; }, [ox, oz]);
+        // 手前へ打ちたいので、画面の上 (奥) へ ひっぱる
+        await pg.mouse.move(back.bp.x, back.bp.y + 60); await pg.mouse.down(); for (let i = 1; i <= 6; i++) { await pg.mouse.move(back.bp.x - ox * 10, back.bp.y + 60 - i * 12); await pg.waitForTimeout(16); }
+        const ba = await pg.evaluate(() => ({ st: window.__putt.S.state, a: window.__putt.S.aim }));
+        await pg.waitForFunction(() => window.__putt.S.pw > 0.25 && window.__putt.S.pw < 0.45, null, { timeout: 4000 });
+        const z0 = await pg.evaluate(() => window.__putt.S.ball.z); await pg.mouse.up();
+        await pg.waitForFunction(() => window.__putt.S.state !== 'roll' && window.__putt.S.state !== 'power', null, { timeout: 10000 });
+        const bz = await pg.evaluate(() => window.__putt.S.ball.z);
+        let dd = ba.a - back.ca; while (dd > Math.PI) dd -= 2 * Math.PI; while (dd < -Math.PI) dd += 2 * Math.PI;
+        ok(ba.st === 'power' && Math.abs(dd) < 0.3 && bz < z0 - 0.2, `ピンより ${oz}m 奥の玉は、画面の上へひっぱると手前のカップへ打ち返せる (ねらいとカップの向きのずれ ${dd.toFixed(3)}・${z0.toFixed(2)} → ${bz.toFixed(2)}m)`);
+      }
       // 遠くへ戻る: 近くの絵に収まらない所 (打ち始め) では遠くの絵
       await pg.evaluate(() => { const U = window.__putt; U.setHole(0); });
       ok(await pg.evaluate(() => window.__putt.VW.to === 0 && getComputedStyle(document.getElementById('pbg')).opacity === '1'), '次のホール (遠い所から) では遠くの絵に戻る')
