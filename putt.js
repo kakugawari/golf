@@ -17,13 +17,34 @@
   const store = () => { try { localStorage.setItem(SAVEK, JSON.stringify(save)); } catch (e) {} };
 
   let W = 0, H = 0, DPR = 1;
+  const AIMHINT = '左右になぞって ねらう → 「うつ」で ゲージ';
   const S = { on: false, hole: 0, strokes: 0, cards: [], state: 'aim', ball: null, v: { x: 0, z: 0 }, prev: null, lipped: false, sunk: false, drag: null, sinkT: 0, msg: '', msgT: 0, t: 0, parts: [] };
   const hole = () => P.HOLES[S.hole], pic = () => P.PICS[hole().pic];
   function fit() { const k = Math.max(W / pic().w, H / pic().h); return { k, ox: (W - pic().w * k) / 2, oy: (H - pic().h * k) / 2 }; }
-  function scr(x, z) { const p = P.toPic(pic(), x, z), f = fit(); return { x: f.ox + p.X * f.k, y: f.oy + p.Y * f.k, s: p.s * f.k }; }
-  function ground(sx, sy) { const f = fit(), pc = pic(); let Y = (sy - f.oy) / f.k; Y = Math.max(pc.vy + 8, Y); return P.toWorld(pc, (sx - f.ox) / f.k, Y); }
+  // 寄らない (絵が画面ぴったり) ときの画面の位置
+  function base(x, z) { const p = P.toPic(pic(), x, z), f = fit(); return { x: f.ox + p.X * f.k, y: f.oy + p.Y * f.k, s: p.s * f.k }; }
+  /* カメラ: 玉がカップに近づくほど、カップを中心に絵ごと寄る (「ピンに近づいたら背景も近くに」と言われた)。
+     寄りの倍率 CAM.z は、玉が画面の下 (高さの 74%) に来るように決める。寄るにつれてカップも画面のまん中 (50%) へ下ろす (歩いて近づいた見え方)。
+     寄る中心 (横はカップ・縦は camFy) は画面の中なので、絵が画面からはみ出してすき間が出ることはない */
+  const CAM = { z: 1 }, CAMMAX = 3, BALLY = 0.74, CUPY = 0.5;
+  function camFy(Z) { const c0 = cupBase(), u = (Z - 1) / (CAMMAX - 1), cupT = c0.y + Math.max(0, H * CUPY - c0.y) * u; return Z > 1.0001 ? (c0.y * Z - cupT) / (Z - 1) : c0.y; }
+  function cupBase() { const c = P.cupOf(pic()); return base(c.x, c.z); }
+  function camTarget() {
+    const c0 = cupBase(), b0 = base(S.ball.x, S.ball.z), dy = b0.y - c0.y, dx = b0.x - c0.x;
+    // 玉の y = カップの行き先 + dy*Z が 74% に来る Z を、少しずつ近づけて求める (カップの行き先も Z で変わるので)
+    let z = 1; for (let i = 0; i < 30; i++) { const u = (z - 1) / (CAMMAX - 1), cupT = c0.y + Math.max(0, H * CUPY - c0.y) * u; z = dy > 1 ? (H * BALLY - cupT) / dy : CAMMAX; z = Math.max(1, Math.min(CAMMAX, z)); }
+    if (dx > 1) z = Math.min(z, (W - 34 - c0.x) / dx); else if (dx < -1) z = Math.min(z, (c0.x - 34) / -dx);   // 玉が横の画面の外へ出ないように
+    return Math.max(1, Math.min(CAMMAX, z));
+  }
+  function scr(x, z) { const c0 = cupBase(), p = base(x, z), Z = CAM.z, fy = camFy(Z); return { x: c0.x + (p.x - c0.x) * Z, y: fy + (p.y - fy) * Z, s: p.s * Z }; }
+  function ground(sx, sy) {
+    const c0 = cupBase(), Z = CAM.z, fy = camFy(Z), f = fit(), pc = pic(), bx = c0.x + (sx - c0.x) / Z, by = fy + (sy - fy) / Z;
+    let Y = (by - f.oy) / f.k; Y = Math.max(pc.vy + 8, Y); return P.toWorld(pc, (bx - f.ox) / f.k, Y);
+  }
+  let camLast = '';
+  function placeCam() { const c0 = cupBase(), Z = CAM.z, fy = camFy(Z), v = `matrix(${Z.toFixed(4)},0,0,${Z.toFixed(4)},${(c0.x * (1 - Z)).toFixed(1)},${(fy * (1 - Z)).toFixed(1)})`; if (v !== camLast) { camLast = v; $('pbg').style.transform = v; } }
   function resize() { const w = root.clientWidth, h = root.clientHeight; if (!(w >= 1 && h >= 1)) return; W = w; H = h; DPR = Math.min(2, devicePixelRatio || 1); cv.width = W * DPR; cv.height = H * DPR; placeBg(); }
-  function placeBg() { if (!(W >= 1)) return; const f = fit(), pc = pic(); root.style.backgroundImage = `url(${pc.src})`; root.style.backgroundSize = `${pc.w * f.k}px ${pc.h * f.k}px`; root.style.backgroundPosition = `${f.ox}px ${f.oy}px`; }
+  function placeBg() { if (!(W >= 1)) return; const f = fit(), pc = pic(), bg = $('pbg').style; bg.backgroundImage = `url(${pc.src})`; bg.backgroundSize = `${pc.w * f.k}px ${pc.h * f.k}px`; bg.backgroundPosition = `${f.ox}px ${f.oy}px`; camLast = ''; placeCam(); }
   addEventListener('resize', resize);
 
   // ---------- 流れ ----------
@@ -33,16 +54,16 @@
   }
   function setHole(i) {
     S.hole = i; S.strokes = 0; S.state = 'aim'; S.ball = P.startOf(hole()); S.prev = { ...S.ball }; S.v = { x: 0, z: 0 };
-    S.lipped = false; S.sunk = false; S.parts = []; S.drag = null; placeBg(); hideCard(); hud(); hint('ボールから うしろへ ひいて、はなすと うつ');
+    S.lipped = false; S.sunk = false; S.parts = []; S.drag = null; CAM.z = 1; S.aim = cupAngle(); placeBg(); hideCard(); hud(); hint(AIMHINT); hudBtn();
   }
   function quit() { S.on = false; root.hidden = true; $('pover').hidden = true; $('title').hidden = false; }
   function shoot(angle, power) {
     S.prev = { ...S.ball }; S.strokes++; const sp = P.speedOf(power);
-    S.v = { x: Math.sin(angle) * sp, z: Math.cos(angle) * sp }; S.lipped = false; S.state = 'roll'; snd.tap(); hud(); hint('');
+    S.v = { x: Math.sin(angle) * sp, z: Math.cos(angle) * sp }; S.lipped = false; S.state = 'roll'; S.drag = null; snd.tap(); hud(); hint(''); hudBtn();
   }
   function holeEnd(holed) {
     const h = hole(), n = holed ? S.strokes : P.MAXSTROKE, name = P.nameOf(n, h.par, holed);
-    S.cards.push({ n, par: h.par }); S.state = 'card'; hud();
+    S.cards.push({ n, par: h.par }); S.state = 'card'; hud(); hudBtn();
     const d = n - h.par, cls = !holed ? 'miss' : d <= -1 || n === 1 ? 'gold' : d === 0 ? 'green' : '';
     showCard(name, cls, n, `パー ${h.par} ・ ${d === 0 ? 'パーどおり' : d > 0 ? `+${d}` : d}`);
     const a = app();
@@ -52,7 +73,7 @@
   function next() { if (S.hole < P.HOLES.length - 1) setHole(S.hole + 1); else finish(); }
   function parSum(k) { return P.HOLES.slice(0, k).reduce((s, h) => s + h.par, 0); }
   function finish() {
-    S.state = 'over'; hideCard(); hint('');
+    S.state = 'over'; hideCard(); hint(''); hudBtn();
     const t = S.cards.reduce((s, c) => s + c.n, 0), par = parSum(S.cards.length), d = t - par, prev = save.last;
     const nb = save.best == null || t < save.best; if (nb) save.best = t; save.last = t; store();
     const rank = d <= -4 ? 'S' : d <= -1 ? 'A' : d <= 2 ? 'B' : d <= 6 ? 'C' : 'D';
@@ -76,6 +97,15 @@
     tx.textContent = m > 0.19 ? 'つよい' : m > 0.13 ? 'ふつう' : 'よわい';
   }
   function hint(t) { $('phint').textContent = t; }
+  // 右はしの棒のゲージ: いまの強さと、「平らならカップまで」の目安の線
+  let gLast = '';
+  function gaugeUI() {
+    if (S.state !== 'aim' && S.state !== 'power') return;
+    const c = P.cupOf(pic()), mark = powerFor(Math.hypot(c.x - S.ball.x, c.z - S.ball.z)), pw = S.state === 'power' ? S.pw : 0, key = pw.toFixed(3) + '|' + mark.toFixed(3);
+    if (key === gLast) return; gLast = key;
+    $('pgfill').style.clipPath = `inset(${((1 - pw) * 100).toFixed(1)}% 0 0 0 round 12px)`; $('pgfill').classList.toggle('hot', pw > 0.85);
+    $('pgmark').style.bottom = (mark * 100).toFixed(1) + '%';
+  }
   function showCard(title, cls, n, sub) { const c = $('ppop'); $('ppt').textContent = title; $('ppt').className = 'rib ' + cls; $('ppn').textContent = n; $('pps').textContent = sub; c.classList.remove('on'); void c.offsetWidth; c.classList.add('on'); }
   function hideCard() { $('ppop').classList.remove('on'); }
   function say(t) { S.msg = t; S.msgT = 1.4; }
@@ -84,36 +114,43 @@
     for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, r = 120 + Math.random() * 380; S.parts.push({ x: p.x, y: p.y - 60, vx: Math.cos(a) * r * 0.6, vy: -Math.abs(Math.sin(a)) * r - 80, c: cols[i % cols.length], life: 1.6 + Math.random(), rot: Math.random() * 6 }); }
   }
 
-  // ---------- 入力: どこからでも うしろへ引いて はなす ----------
-  const PULL = 220;   // これだけ引くと いちばん強い
-  function aimOf(d) {
-    const b = scr(S.ball.x, S.ball.z), L = Math.hypot(d.x, d.y); if (L < 1) return null;
-    const t = ground(b.x + d.x / L * 140, b.y + d.y / L * 140);
-    return { angle: Math.atan2(t.x - S.ball.x, t.z - S.ball.z), power: Math.min(1, L / PULL) };
-  }
+  // ---------- 入力: 左右になぞって ねらい、「うつ」で棒のゲージを動かし、いい所でタップして止める ----------
+  // (前は「うしろへ引いて はなす」だったが、「引いているときに何も出ないので分かりにくい」と言われた)
+  const AIMMAX = 0.7;   // カップの向きから左右にこれだけ (ラジアン) までねらえる
+  function cupAngle() { const c = P.cupOf(pic()); return Math.atan2(c.x - S.ball.x, c.z - S.ball.z); }
+  function powerFor(dist) { return Math.max(0, Math.min(1, (Math.sqrt(2 * P.MU * dist) - P.VMIN) / (P.VMAX - P.VMIN))); }   // 平らなら dist だけ転がる強さ
+  function startGauge() { if (S.state !== 'aim') return; S.state = 'power'; S.pt = 0; S.pw = 0; hint('いいところで タップ!'); hudBtn(); snd.tick(); }
+  function stopGauge() { if (S.state !== 'power') return; shoot(S.aim, Math.max(0.02, S.pw)); }
+  function hudBtn() { const b = $('pshot'); b.querySelector('b').textContent = S.state === 'power' ? 'とめる!' : 'うつ'; b.querySelector('small').textContent = S.state === 'power' ? 'どこでもタップ' : 'ゲージ'; b.classList.toggle('now', S.state === 'power'); b.hidden = !(S.state === 'aim' || S.state === 'power'); $('pgauge').hidden = !(S.state === 'aim' || S.state === 'power'); }
   root.addEventListener('pointerdown', (e) => {
     if (!S.on || e.target.closest('button,#pover')) return;
     e.preventDefault();
     if (S.state === 'card') { next(); return; }
+    if (S.state === 'power') { stopGauge(); return; }   // ゲージが動いているあいだは、どこをタップしても止まる
     if (S.state !== 'aim') return;
-    S.drag = { x: e.clientX, y: e.clientY, id: e.pointerId, cx: e.clientX, cy: e.clientY, p: 0 };
+    S.drag = { x: e.clientX, id: e.pointerId, aim: S.aim };
     try { root.setPointerCapture(e.pointerId); } catch (err) {}
   });
   root.addEventListener('pointermove', (e) => {
-    const d = S.drag; if (!d || e.pointerId !== d.id) return;
-    d.cx = e.clientX; d.cy = e.clientY; const a = aimOf({ x: d.x - d.cx, y: d.y - d.cy }), p = a ? Math.round(a.power * 10) : 0;
-    if (p !== d.p) { d.p = p; snd.tick(); }
+    const d = S.drag; if (!d || e.pointerId !== d.id || S.state !== 'aim') return;
+    const ca = cupAngle(), a = Math.max(ca - AIMMAX, Math.min(ca + AIMMAX, d.aim + (e.clientX - d.x) * 0.0022));
+    if (Math.round(a * 100) !== Math.round(S.aim * 100)) snd.tick(); S.aim = a;
   });
-  root.addEventListener('pointerup', (e) => {
-    const d = S.drag; if (!d || e.pointerId !== d.id) return; S.drag = null; if (S.state !== 'aim') return;
-    const a = aimOf({ x: d.x - d.cx, y: d.y - d.cy }); if (a && a.power > 0.04) shoot(a.angle, a.power);
-  });
-  root.addEventListener('pointercancel', (e) => { if (S.drag && e.pointerId === S.drag.id) S.drag = null; });
+  const endDrag = (e) => { if (S.drag && e.pointerId === S.drag.id) S.drag = null; };
+  root.addEventListener('pointerup', endDrag); root.addEventListener('pointercancel', endDrag);
+  $('pshot').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (S.state === 'aim') startGauge(); else stopGauge(); });
   $('pquit').onclick = quit; $('bP').onclick = start; $('pagain').onclick = start; $('ptitle').onclick = quit;
 
   // ---------- 動き ----------
   function update(dt) {
     S.t += dt; if (S.msgT > 0) S.msgT -= dt;
+    if (S.state === 'power') {
+      // ゲージは 0 → 1 → 0 を 1.6 秒で行き来する (止める瞬間をねらう)
+      S.pt += dt; const ph = (S.pt / 1.6) % 1; S.pw = ph < 0.5 ? ph * 2 : 2 - ph * 2;
+    }
+    gaugeUI();
+    if ((S.state === 'aim' || S.state === 'power') && !S.drag) { const t = camTarget(); CAM.z += (t - CAM.z) * Math.min(1, dt * 2.2); if (Math.abs(t - CAM.z) < 0.002) CAM.z = t; }
+    placeCam();
     for (const q of S.parts) { q.vy += 520 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; q.rot += dt * 8; }
     S.parts = S.parts.filter((q) => q.life > 0 && q.y < H + 40);
     if (S.state === 'roll') {
@@ -121,8 +158,8 @@
       for (let i = 0, n = Math.max(1, Math.round(dt * 120)); i < n; i++) {
         const r = P.step(st, hole(), 1 / 120);
         if (r === 'in') { S.state = 'sink'; S.sinkT = 0; S.sunk = true; snd.cup(); break; }
-        if (r === 'out') { S.ball = { ...S.prev }; S.v = { x: 0, z: 0 }; S.strokes++; say('グリーンの そと! +1'); hud(); S.state = S.strokes >= P.MAXSTROKE ? 'end' : 'aim'; break; }
-        if (r === 'stop') { S.state = S.strokes >= P.MAXSTROKE ? 'end' : 'aim'; if (S.state === 'aim') { hud(); hint('つぎの 1 打'); } break; }
+        if (r === 'out') { S.ball = { ...S.prev }; S.v = { x: 0, z: 0 }; S.strokes++; say('グリーンの そと! +1'); hud(); S.state = S.strokes >= P.MAXSTROKE ? 'end' : 'aim'; if (S.state === 'aim') { S.aim = cupAngle(); hudBtn(); } break; }
+        if (r === 'stop') { S.state = S.strokes >= P.MAXSTROKE ? 'end' : 'aim'; if (S.state === 'aim') { S.aim = cupAngle(); hud(); hint(AIMHINT); hudBtn(); } break; }
       }
       S.lipped = st.lipped;
       if (S.state === 'end') holeEnd(false);
@@ -145,26 +182,22 @@
   }
   function distTag(b, c, cp) {
     const tx = `${Math.hypot(c.x - b.x, c.z - b.z).toFixed(1)}m`;
-    ctx.font = '800 15px "M PLUS Rounded 1c",sans-serif'; const w = ctx.measureText(tx).width + 16, x = cp.x - w / 2, y = cp.y + 14;   // カップの下 (上だと旗の棒に重なる)
+    ctx.font = '800 15px "M PLUS Rounded 1c",sans-serif'; const w = ctx.measureText(tx).width + 16, x = cp.x + Math.max(16, cp.s * 0.15), y = cp.y - 11;   // カップの右 (上だと旗の棒、下だと近づいた玉に重なる)
     ctx.fillStyle = 'rgba(12,20,15,.72)'; ctx.beginPath(); ctx.roundRect(x, y, w, 22, 6); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cp.x - 5, y); ctx.lineTo(cp.x + 5, y); ctx.lineTo(cp.x, y - 6); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(tx, cp.x, y + 12);
+    ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(x, y + 16); ctx.lineTo(x - 6, y + 11); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(tx, x + w / 2, y + 12);
   }
   function aimGuide(b, bp, c) {
-    const a = aimOf({ x: S.drag.x - S.drag.cx, y: S.drag.y - S.drag.cy }); if (!a) return;
-    // 平らなら ここまで転がる、という所まで点線。かたむきでどう曲がるかは見せない (読むのが遊び)
-    const sp = P.speedOf(a.power), L = sp * sp / (2 * P.MU), sx = Math.sin(a.angle), sz = Math.cos(a.angle), lim = c.z + 3;
-    for (let d = 0.15; d < L; d += 0.18) {
-      if (b.z + sz * d > lim) break; const p = scr(b.x + sx * d, b.z + sz * d), r = Math.max(1.5, 0.025 * p.s);
-      ctx.fillStyle = `rgba(255,255,255,${0.9 - 0.5 * d / L})`; ctx.beginPath(); ctx.ellipse(p.x, p.y, r, r * 0.45, 0, 0, 7); ctx.fill();
+    // ねらいの線: カップまでの距離ぶん、ねらった向きへ点線。ゲージが動いているあいだは、平らなら止まる所に金色の輪
+    const sx = Math.sin(S.aim), sz = Math.cos(S.aim), D = Math.hypot(c.x - b.x, c.z - b.z) + 0.4, lim = c.z + 3;
+    for (let d = 0.15; d < D; d += 0.16) {
+      if (b.z + sz * d > lim) break; const p = scr(b.x + sx * d, b.z + sz * d), r = Math.max(1.5, 0.022 * p.s);
+      ctx.fillStyle = `rgba(255,255,255,${0.95 - 0.55 * d / D})`; ctx.beginPath(); ctx.ellipse(p.x, p.y, r, r * 0.45, 0, 0, 7); ctx.fill();
     }
-    if (b.z + sz * L <= lim) { const e = scr(b.x + sx * L, b.z + sz * L), r = Math.max(4, 0.1 * e.s); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(e.x, e.y, r, r * 0.4, 0, 0, 7); ctx.stroke(); }
-    // 強さの輪 (玉のまわり)。強すぎる所は赤
-    const R = 34; ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(bp.x, bp.y, R, 0, 7); ctx.stroke();
-    ctx.strokeStyle = a.power > 0.85 ? '#ff6a4d' : '#ffd23f'; ctx.beginPath(); ctx.arc(bp.x, bp.y, R, -Math.PI / 2, -Math.PI / 2 + a.power * Math.PI * 2); ctx.stroke();
-    // 指を引いた線
-    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.setLineDash([5, 6]);
-    ctx.beginPath(); ctx.moveTo(bp.x, bp.y); ctx.lineTo(bp.x - (S.drag.x - S.drag.cx), bp.y - (S.drag.y - S.drag.cy)); ctx.stroke(); ctx.setLineDash([]);
+    if (S.state === 'power') {
+      const sp = P.speedOf(S.pw), L = sp * sp / (2 * P.MU);
+      if (b.z + sz * L <= lim) { const e = scr(b.x + sx * L, b.z + sz * L), r = Math.max(5, 0.1 * e.s); ctx.strokeStyle = S.pw > 0.85 ? '#ff6a4d' : '#ffd23f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(e.x, e.y, r, r * 0.4, 0, 0, 7); ctx.stroke(); }
+    }
   }
   function drawBall(bp) {
     // カップに入ると小さくなって消える
@@ -178,8 +211,8 @@
   function draw() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
     const c = P.cupOf(pic()), cp = scr(c.x, c.z), b = S.ball, bp = scr(b.x, b.z);
-    if (S.state === 'aim' || S.state === 'roll') { slopeMarks(b, c); distTag(b, c, cp); }
-    if (S.drag && S.state === 'aim') aimGuide(b, bp, c);
+    if (S.state === 'aim' || S.state === 'power' || S.state === 'roll') { slopeMarks(b, c); distTag(b, c, cp); }
+    if (S.state === 'aim' || S.state === 'power') aimGuide(b, bp, c);
     drawBall(bp);
     for (const q of S.parts) { ctx.globalAlpha = Math.min(1, q.life / 0.5); ctx.fillStyle = q.c; ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.fillRect(-5, -2.5, 10, 5); ctx.restore(); }
     ctx.globalAlpha = 1;
@@ -192,5 +225,5 @@
   function loop(now) { if (!S.on) return; requestAnimationFrame(loop); const dt = Math.min(0.05, Math.max(0, (now - T0) / 1000)); T0 = now; if (document.hidden) return; update(dt); draw(); }
 
   // テストから中身をのぞく入口
-  window.__putt = { S, start, setHole, shoot, scr, ground, aimOf, next, finish, get save() { return save; } };
+  window.__putt = { S, CAM, camTarget, start, setHole, shoot, scr, ground, cupAngle, powerFor, startGauge, stopGauge, next, finish, get save() { return save; } };
 })();
